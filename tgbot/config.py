@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 from environs import Env
 
+from sqlalchemy.engine import URL
+
 
 @dataclass
 class DbConfig:
@@ -9,6 +11,17 @@ class DbConfig:
     password: str
     user: str
     database: str
+    port: int
+
+    def construct_sqlalchemy_url(self) -> URL:
+        return URL.create(
+            drivername='postgresql+asyncpg',
+            username=self.user,
+            password=self.password,
+            host=self.host,
+            database=self.database,
+            port=self.port
+        )
 
 
 @dataclass
@@ -20,7 +33,9 @@ class TgBot:
 
 @dataclass
 class Miscellaneous:
-    other_params: str = None
+    X_Client_ID: dict
+    X_API_Key: dict
+    X_Park_ID: dict
 
 
 @dataclass
@@ -44,7 +59,12 @@ def load_config(path: str = None):
             host=env.str('DB_HOST'),
             password=env.str('DB_PASS'),
             user=env.str('DB_USER'),
+            port=env.str('DP_PORT'),
             database=env.str('DB_NAME')
         ),
-        misc=Miscellaneous()
+        misc=Miscellaneous(
+            X_Client_ID=env.str('X-Client-ID'),
+            X_API_Key=env.str('X-API-Key'),
+            X_Park_ID=env.str('X-Park-ID')
+        )
     )

@@ -8,15 +8,20 @@ from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from tgbot.config import load_config
 from tgbot.filters.admin import AdminFilter
 from tgbot.handlers.admin import register_admin
-from tgbot.handlers.echo import register_echo
 from tgbot.handlers.user import register_user
+from tgbot.middlewares.database import DatabaseMiddleware
 from tgbot.middlewares.environment import EnvironmentMiddleware
+from tgbot.middlewares.throttling import ThrottlingMiddleware
+from tgbot.models.config import create_session_pool
+
 
 logger = logging.getLogger(__name__)
 
 
-def register_all_middlewares(dp, config):
+def register_all_middlewares(dp, config, session_pool):
     dp.setup_middleware(EnvironmentMiddleware(config=config))
+    dp.setup_middleware(DatabaseMiddleware(session=session_pool))
+    dp.setup_middleware(ThrottlingMiddleware())
 
 
 def register_all_filters(dp):
@@ -26,8 +31,6 @@ def register_all_filters(dp):
 def register_all_handlers(dp):
     register_admin(dp)
     register_user(dp)
-
-    register_echo(dp)
 
 
 async def main():
@@ -42,9 +45,12 @@ async def main():
     bot = Bot(token=config.tg_bot.token, parse_mode='HTML')
     dp = Dispatcher(bot, storage=storage)
 
-    bot['config'] = config
+    session_pool = await create_session_pool(db=config.db, echo=True)
 
-    register_all_middlewares(dp, config)
+    bot['config'] = config
+    bot['dp'] = dp
+
+    register_all_middlewares(dp, config, session_pool)
     register_all_filters(dp)
     register_all_handlers(dp)
 
@@ -54,7 +60,7 @@ async def main():
     finally:
         await dp.storage.close()
         await dp.storage.wait_closed()
-        await bot.session.close()
+        await (await bot.get_session()).close()
 
 
 if __name__ == '__main__':

@@ -1,10 +1,117 @@
-from aiogram import Dispatcher
-from aiogram.types import Message
+from aiogram.dispatcher.filters import CommandStart, Command
+from aiogram.dispatcher import Dispatcher
+from aiogram.types import Message, CallbackQuery
+from aiogram.dispatcher import FSMContext
+
+from tgbot.keyboards.inline import access
+from tgbot.keyboards.user_button import menu
+from tgbot.misc.states import DeleteState, RegisterState
+from tgbot.models.query import add_user, drop_user
+from tgbot.services.api_requests import get_driver_profile
+from tgbot.services.set_commands import set_default_commands
 
 
 async def admin_start(message: Message):
-    await message.reply("Hello, admin!")
+    # приветственное сообщение для администратора.
+    await message.answer(f'Приветствую, {message.from_user.first_name}(admin)!')
+    # команды для администратора.
+    await set_default_commands(
+        message.bot,
+        user_id=message.from_id
+    )
+
+
+async def get_user(message: Message, state: FSMContext):
+    # Из функции get_driver_profile получаем данные о водителе.
+    phone = message.text
+    # ключи для выполнения запрос к API Yandex
+    header = message.bot.get('config').misc
+    user = await get_driver_profile(phone, header)
+    admin = message.bot.get('config').tg_bot.admin_ids[0]
+    print(admin, phone, user)
+    # Делаем проверку на получение пользователя.
+    if not isinstance(user, str):
+        # сбрасываем состояние водителя.
+        await state.finish()
+        # Отправляем админу заявку на добавление пользователя.
+        msg = await message.bot.send_message(
+            chat_id=admin,
+            text=f'{user[0]} {user[1]} {user[2]}\n'
+                 f'+{user[3]}',
+            reply_markup=access
+        )
+        # Добавляем юзера в хранилище dp.
+        await message.bot.get('dp').storage.update_data(
+            chat=admin,
+            user=user[3],
+            data={'first_name': user[0],
+                  'last_name': user[1],
+                  'middle_name': user[2],
+                  'phone': user[3],
+                  'taxi_id': user[4],
+                  'telegram_id': message.from_user.id,
+                  'message_id': msg.message_id
+                  }
+        )
+        # Отправка сообщения пользователю (водителю).
+        await message.answer(
+            text='Заявка отправлена. Ожидайте...'
+        )
+    # Пользовтаель не найден.
+    else:
+        await message.answer(
+            text=user
+        )
+
+
+async def add_or_refuse_user(call: CallbackQuery, session):
+    """Добавление пользователя в БД."""
+    phone = int(call.message.text.split('\n').pop(1))
+    admin = call.message.bot.get('config').tg_bot.admin_ids[0]
+    # получение user из storage.
+    user = await call.bot.get('dp').storage.get_data(chat=admin, user=phone)
+
+    # очистка usera из storage.
+    await call.bot.get('dp').storage.finish(chat=admin, user=phone)
+
+    if call.data == 'add':
+        await add_user(session, user)
+        await call.message.bot.send_message(chat_id=user.get('telegram_id'),
+                                            text='Доступ разрешен!',
+                                            reply_markup=menu)
+        await call.message.bot.send_message(chat_id=admin,
+                                            text='Водитель добавлен в базу!')
+    elif call.data == 'reject':
+        # В случае если админ отказал добавить пользователя.
+        await call.message.bot.send_message(chat_id=user.get('telegram_id'),
+                                            text='В доступе отказано!')
+
+    # удаление у админа клавиатуры и сообщения.
+    await call.message.edit_reply_markup()
+    await call.message.bot.delete_message(chat_id=admin, message_id=user.get('message_id'))
+
+
+async def remove_user(message: Message):
+    """Ввод номера телефона для удаления пользователя."""
+    await message.answer('Введите номер телефона водителя, которого необходимо удалить.')
+    await DeleteState.phone.set()
+
+
+async def removing_the_user(message: Message, session, state: FSMContext):
+    """Удаление user из базы."""
+    try:
+        phone = await drop_user(session, message.text, state)
+        # если вернулся телефонный номер
+        await message.answer(phone)
+    # некорректно введенный номер
+    except ValueError:
+        await message.answer(f'Введен некорректный номер телефона: {message.text}. '
+                             'Попробуйте ввести ещё раз..')
 
 
 def register_admin(dp: Dispatcher):
-    dp.register_message_handler(admin_start, commands=["start"], state="*", is_admin=True)
+    dp.register_message_handler(admin_start, CommandStart(), state='*', is_admin=True)
+    dp.register_message_handler(get_user, state=RegisterState.phone)
+    dp.register_callback_query_handler(add_or_refuse_user, text=['add', 'reject'], is_admin=True)
+    dp.register_message_handler(remove_user, Command('remove_user'), is_admin=True)
+    dp.register_message_handler(removing_the_user, state=DeleteState.phone, is_admin=True)
