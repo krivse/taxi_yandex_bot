@@ -40,7 +40,7 @@ class ThrottlingMiddleware(BaseMiddleware):
         delta = int(throttled.rate - throttled.delta)
         # проверяем сколько раз нажали на кнопку
         if throttled.exceeded_count > 2:
-            await target.answer(f'Задержка {delta} сек')
+            await target.answer(f'Вы сможете отпарвить следующее сообщение через {delta} сек')
             return
         await asyncio.sleep(delta)
 

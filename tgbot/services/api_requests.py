@@ -20,7 +20,7 @@ async def change_of_payment_method(limit, taxi_id, header):
             profile = response.get('profile')
             order_provider = response.get('order_provider')
             car_id = response.get('car_id')
-            print(response)
+
             params = {
                 'account': {
                     'balance_limit': limit,
@@ -79,7 +79,6 @@ async def get_driver_profile(phone, header):
             # получение списка профилей.
             response = await (await connect.post(url, json=query, headers=headers)).json()
             user = None
-            print(response)
 
             # перебор профилей и запись необоздимых данных из профиля.
             for profile in range(len(response.get('driver_profiles'))):

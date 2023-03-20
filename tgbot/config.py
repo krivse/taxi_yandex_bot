@@ -63,8 +63,8 @@ def load_config(path: str = None):
             database=env.str('DB_NAME')
         ),
         misc=Miscellaneous(
-            X_Client_ID=env.str('X-Client-ID'),
-            X_API_Key=env.str('X-API-Key'),
-            X_Park_ID=env.str('X-Park-ID')
+            X_Client_ID=env.str('X_Client_ID'),
+            X_API_Key=env.str('X_API_Key'),
+            X_Park_ID=env.str('X_Park_ID')
         )
     )

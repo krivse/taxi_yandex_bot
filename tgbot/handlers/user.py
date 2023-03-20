@@ -21,13 +21,13 @@ async def user_start(message: Message, session, state: FSMContext):
 
     if user is None:
         # приветственное сообщение для пользователя.
-        await message.answer(f'{message.from_user.full_name}, вас приветствует бот Фартового парка.\n'
-                             'Для авторизации в системе введите номер телефона.')
+        await message.answer(f'{message.from_user.full_name}, вас приветствует бот Фартового парка.\n '
+                            'Для авторизации в системе введите номер телефона как в Яндекс Про.')
         # Администратору в хендлер add_user будет отловлено состояние пользователя.
         await RegisterState.phone.set()
     else:
         # выводится сообщение об выборе тарифа работы.
-        await message.answer(f'{user[0]} {user[1]}, выберите способ рассчета.', reply_markup=menu)
+        await message.answer(f'{user[0]} {user[1]}, способ оплаты за заказы в Яндекс Про', reply_markup=menu)
         await state.update_data(first_name=user[0], last_name=user[1], taxi_id=user[2])
 
 
@@ -51,12 +51,12 @@ async def payment_method(message: Message, session, state: FSMContext):
         await change_of_payment_method('15000', taxi_id, header)
         await message.answer(f'{first_name} {last_name}, '
                              'ваш лимит 15000 руб. Пока ваш баланс ниже этой '
-                             'суммы вам будут поступать только БЕЗНАЛИЧНЫЕ заказы')
+                             'суммы вам будут поступать только БЕЗНАЛИЧНЫЕ заказы.')
     elif method == 'Нал / Безнал' and user is not None:
         # установка лимита для оплаты по нал / безннал.
         await change_of_payment_method('50', taxi_id, header)
         await message.answer(f'{first_name} {last_name}, ваш лимит 50 руб. '
-                             'Теперь вам будут поступать НАЛИЧНЫЕ и БЕЗНАЛИЧНЫЕ заказы')
+                             'Теперь вам будут поступать НАЛИЧНЫЕ и БЕЗНАЛИЧНЫЕ заказы.')
     else:
         await message.answer(f'У вас нет доступа!')
     # сбрасывается состояние пользователя.

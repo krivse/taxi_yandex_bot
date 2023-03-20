@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import asyncio
 import logging
 
@@ -8,6 +9,7 @@ from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from tgbot.config import load_config
 from tgbot.filters.admin import AdminFilter
 from tgbot.handlers.admin import register_admin
+from tgbot.handlers.errors import register_errors_handler
 from tgbot.handlers.user import register_user
 from tgbot.middlewares.database import DatabaseMiddleware
 from tgbot.middlewares.environment import EnvironmentMiddleware
@@ -31,6 +33,7 @@ def register_all_filters(dp):
 def register_all_handlers(dp):
     register_admin(dp)
     register_user(dp)
+    register_errors_handler(dp)
 
 
 async def main():
@@ -45,7 +48,7 @@ async def main():
     bot = Bot(token=config.tg_bot.token, parse_mode='HTML')
     dp = Dispatcher(bot, storage=storage)
 
-    session_pool = await create_session_pool(db=config.db, echo=True)
+    session_pool = await create_session_pool(db=config.db, echo=False)
 
     bot['config'] = config
     bot['dp'] = dp
@@ -68,3 +71,5 @@ if __name__ == '__main__':
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         logger.error("Bot stopped!")
+    except TimeoutError as e:
+        logging.error(f'Возникла ошибка времени ожидания: {e}')

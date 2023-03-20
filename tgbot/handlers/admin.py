@@ -28,7 +28,7 @@ async def get_user(message: Message, state: FSMContext):
     header = message.bot.get('config').misc
     user = await get_driver_profile(phone, header)
     admin = message.bot.get('config').tg_bot.admin_ids[0]
-    print(admin, phone, user)
+
     # Делаем проверку на получение пользователя.
     if not isinstance(user, str):
         # сбрасываем состояние водителя.
@@ -55,7 +55,7 @@ async def get_user(message: Message, state: FSMContext):
         )
         # Отправка сообщения пользователю (водителю).
         await message.answer(
-            text='Заявка отправлена. Ожидайте...'
+            text='Заявка отправлена в парк. Ожидайте...'
         )
     # Пользовтаель не найден.
     else:
@@ -68,21 +68,23 @@ async def add_or_refuse_user(call: CallbackQuery, session):
     """Добавление пользователя в БД."""
     phone = int(call.message.text.split('\n').pop(1))
     admin = call.message.bot.get('config').tg_bot.admin_ids[0]
+
     # получение user из storage.
     user = await call.bot.get('dp').storage.get_data(chat=admin, user=phone)
-
     # очистка usera из storage.
     await call.bot.get('dp').storage.finish(chat=admin, user=phone)
 
     if call.data == 'add':
+        # запроса на добавление пользователя в бд.
         await add_user(session, user)
         await call.message.bot.send_message(chat_id=user.get('telegram_id'),
-                                            text='Доступ разрешен!',
+                                            text='Доступ разрешен. '
+                                                 'Теперь вы можете переключать способ оплаты за заказы в Яндекс Про.',
                                             reply_markup=menu)
         await call.message.bot.send_message(chat_id=admin,
                                             text='Водитель добавлен в базу!')
     elif call.data == 'reject':
-        # В случае если админ отказал добавить пользователя.
+        # вывод сообщения в случае если админ отказал добавить пользователя.
         await call.message.bot.send_message(chat_id=user.get('telegram_id'),
                                             text='В доступе отказано!')
 
@@ -112,6 +114,6 @@ async def removing_the_user(message: Message, session, state: FSMContext):
 def register_admin(dp: Dispatcher):
     dp.register_message_handler(admin_start, CommandStart(), state='*', is_admin=True)
     dp.register_message_handler(get_user, state=RegisterState.phone)
-    dp.register_callback_query_handler(add_or_refuse_user, text=['add', 'reject'], is_admin=True)
+    dp.register_callback_query_handler(add_or_refuse_user, text=['add', 'reject'])
     dp.register_message_handler(remove_user, Command('remove_user'), is_admin=True)
     dp.register_message_handler(removing_the_user, state=DeleteState.phone, is_admin=True)
