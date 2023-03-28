@@ -26,7 +26,12 @@ async def admin_start(message: Message):
 async def get_user(message: Message, session, state: FSMContext):
     # Из функции get_driver_profile получаем данные о водителе.
     phone = message.text
-    user_unique = await get_user_unique_phone(session, phone)
+    try:
+        if phone.isdigit():
+            user_unique = await get_user_unique_phone(session, phone)
+    except ValueError:
+        await state.reset_state()
+        await message.answer(f'Попробуйте ещё раз и вводите только цифры /start')
     if not user_unique:
         # ключи для выполнения запрос к API Yandex
         header = message.bot.get('config').misc

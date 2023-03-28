@@ -27,7 +27,7 @@ async def user_start(message: Message, session, state: FSMContext):
         await RegisterState.phone.set()
     else:
         # выводится сообщение об выборе тарифа работы.
-        await message.answer(f'{user[0]} {user[1]}, способ оплаты за заказы в Яндекс Про', reply_markup=menu)
+        await message.answer(f'{user[0]} {user[1]}, выберите способ оплаты за заказы в Яндекс Про', reply_markup=menu)
         await state.update_data(first_name=user[0], last_name=user[1], taxi_id=user[2])
 
 
