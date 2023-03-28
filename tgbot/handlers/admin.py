@@ -26,54 +26,53 @@ async def admin_start(message: Message):
 async def get_user(message: Message, session, state: FSMContext):
     # Из функции get_driver_profile получаем данные о водителе.
     phone = message.text
-    try:
-        if phone.isdigit():
-            user_unique = await get_user_unique_phone(session, phone)
-    except ValueError:
-        await state.reset_state()
-        await message.answer(f'Попробуйте ещё раз и вводите только цифры /start')
-    if not user_unique:
-        # ключи для выполнения запрос к API Yandex
-        header = message.bot.get('config').misc
-        user = await get_driver_profile(phone, header)
-        admin = message.bot.get('config').tg_bot.admin_ids[0]
-        # Делаем проверку на получение пользователя.
-        if not isinstance(user, str):
-            # сбрасываем состояние водителя.
+    if phone.isdigit():
+        user_unique = await get_user_unique_phone(session, phone)
+        if not user_unique:
+            # ключи для выполнения запрос к API Yandex
+            header = message.bot.get('config').misc
+            user = await get_driver_profile(phone, header)
+            admin = message.bot.get('config').tg_bot.admin_ids[0]
+            # Делаем проверку на получение пользователя.
+            if not isinstance(user, str):
+                # сбрасываем состояние водителя.
+                await state.finish()
+                # Отправляем админу заявку на добавление пользователя.
+                msg = await message.bot.send_message(
+                    chat_id=admin,
+                    text=f'{user[0]} {user[1]} {user[2]}\n'
+                         f'+{user[3]}',
+                    reply_markup=access
+                )
+                # Добавляем юзера в хранилище dp.
+                await message.bot.get('dp').storage.update_data(
+                    chat=admin,
+                    user=user[3],
+                    data={'first_name': user[0],
+                          'last_name': user[1],
+                          'middle_name': user[2],
+                          'phone': user[3],
+                          'taxi_id': user[4],
+                          'telegram_id': message.from_user.id,
+                          'message_id': msg.message_id
+                          }
+                )
+                # Отправка сообщения пользователю (водителю).
+                await message.answer(
+                    text='Заявка отправлена в парк. Ожидайте...'
+                )
+            # Пользовтаель не найден.
+            else:
+                await message.answer(
+                    text=user
+                )
+        elif user_unique:
             await state.finish()
-            # Отправляем админу заявку на добавление пользователя.
-            msg = await message.bot.send_message(
-                chat_id=admin,
-                text=f'{user[0]} {user[1]} {user[2]}\n'
-                     f'+{user[3]}',
-                reply_markup=access
-            )
-            # Добавляем юзера в хранилище dp.
-            await message.bot.get('dp').storage.update_data(
-                chat=admin,
-                user=user[3],
-                data={'first_name': user[0],
-                      'last_name': user[1],
-                      'middle_name': user[2],
-                      'phone': user[3],
-                      'taxi_id': user[4],
-                      'telegram_id': message.from_user.id,
-                      'message_id': msg.message_id
-                      }
-            )
-            # Отправка сообщения пользователю (водителю).
-            await message.answer(
-                text='Заявка отправлена в парк. Ожидайте...'
-            )
-        # Пользовтаель не найден.
-        else:
-            await message.answer(
-                text=user
-            )
-    elif user_unique:
-        await state.finish()
-        await message.answer('В доступе отказано. Телефонный номер уже привязан к другому аккаунту, '
-                             'обратитесь в техподдержку парка.')
+            await message.answer('В доступе отказано. Телефонный номер уже привязан к другому аккаунту, '
+                                 'обратитесь в техподдержку парка.')
+    else:
+        await message.answer(f'Попробуйте ещё раз и вводите только цифры /start')
+
 
 async def add_or_refuse_user(call: CallbackQuery, session):
     """Добавление пользователя в БД."""

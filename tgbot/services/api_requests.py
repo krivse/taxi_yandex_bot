@@ -102,8 +102,6 @@ async def get_driver_profile(phone, header):
             logging.error(f'Возникла ошибка времени ожидания: {e}')
         except aiohttp.ClientError as e:
             logging.error(f'Возникла сетевая ошибка: {e}')
-        except ValueError:
-            return 'Введите номер телефона!'
         except Exception as e:
             logging.error(f'Ошибка {e}')
 
