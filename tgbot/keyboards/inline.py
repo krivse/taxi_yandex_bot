@@ -8,3 +8,11 @@ access = InlineKeyboardMarkup(
         ]
     ]
 )
+
+reset_user_removal = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(text='Отмена', callback_data='cancel')
+        ]
+    ]
+)

@@ -33,6 +33,7 @@ async def user_start(message: Message, session, state: FSMContext):
 
 async def payment_method(message: Message, session, state: FSMContext):
     """Выбор способа оплаты."""
+    admin = message.bot.get('config').tg_bot.admin_ids[0]
     # ключи для выполнения запрос к API Yandex
     header = message.bot.get('config').misc
     # название кнопки
@@ -48,15 +49,31 @@ async def payment_method(message: Message, session, state: FSMContext):
             first_name, last_name, taxi_id = user
     if method == 'Безнал' and user is not None:
         # установка лимита для оплаты по безналу.
-        await change_of_payment_method('15000', taxi_id, header)
-        await message.answer(f'{first_name} {last_name}, '
-                             'ваш лимит 15000 руб. Пока ваш баланс ниже этой '
-                             'суммы вам будут поступать только БЕЗНАЛИЧНЫЕ заказы.')
+        response = await change_of_payment_method('15000', taxi_id, header)
+        if response == 200:
+            await message.answer(f'{first_name} {last_name}, '
+                                 'ваш лимит 15000 руб. Пока ваш баланс ниже этой '
+                                 'суммы вам будут поступать только БЕЗНАЛИЧНЫЕ заказы.')
+        elif response == 400:
+            await message.answer(f'Водитель на проверке, попробуйте позже или обратитесь в техподдержку парка')
+        else:
+            await message.answer('Ошибка запроса, попробуйте позже')
+            await message.bot.send_message(
+                chat_id=admin,
+                text=f'Ошибка запроса при изменения лимита у {last_name} {first_name}, код состояния: {response}')
     elif method == 'Нал / Безнал' and user is not None:
         # установка лимита для оплаты по нал / безннал.
-        await change_of_payment_method('50', taxi_id, header)
-        await message.answer(f'{first_name} {last_name}, ваш лимит 50 руб. '
-                             'Теперь вам будут поступать НАЛИЧНЫЕ и БЕЗНАЛИЧНЫЕ заказы.')
+        response = await change_of_payment_method('50', taxi_id, header)
+        if response == 200:
+            await message.answer(f'{first_name} {last_name}, ваш лимит 50 руб. '
+                                 'Теперь вам будут поступать НАЛИЧНЫЕ и БЕЗНАЛИЧНЫЕ заказы.')
+        elif response == 400:
+            await message.answer(f'Водитель на проверке, попробуйте позже или обратитесь в техподдержку парка.')
+        else:
+            await message.answer('Ошибка запроса, попробуйте позже.')
+            await message.bot.send_message(
+                chat_id=admin,
+                text=f'Ошибка запроса при изменения лимита у {last_name} {first_name}, код состояния: {response}.')
     else:
         await message.answer(f'У вас нет доступа!')
     # сбрасывается состояние пользователя.

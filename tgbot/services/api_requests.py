@@ -10,10 +10,12 @@ async def change_of_payment_method(limit, taxi_id, header):
         headers = {
             'X-Client-ID': header.X_Client_ID,
             'X-API-Key': header.X_API_Key,
-            'X-Park-ID': header.X_Park_ID}
+            'X-Park-ID': header.X_Park_ID
+        }
 
         try:
             response = await (await connect.get(url.format(), headers=headers)).json()
+
             # получение данных из профиля для выполнения корректного запроса PUT.
             account = response.get('account')
             person = response.get('person')
@@ -55,9 +57,11 @@ async def change_of_payment_method(limit, taxi_id, header):
             }
 
             # запрос на редакитрование лимита в профиле.
-            await connect.put(url.format(),
-                              headers=headers,
-                              data=json.dumps(params))
+            response_put = await connect.put(url.format(),
+                                             headers=headers,
+                                             data=json.dumps(params))
+            return response_put.status
+
         except TimeoutError as e:
             logging.error(f'Возникла ошибка времени ожидания: {e}')
         except aiohttp.ClientError as e:
@@ -102,8 +106,6 @@ async def get_driver_profile(phone, header):
             return 'Введите номер телефона!'
         except Exception as e:
             logging.error(f'Ошибка {e}')
-
-        await connect.close()
 
 
 def phone_formatting(user_phone):

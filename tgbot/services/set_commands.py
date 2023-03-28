@@ -9,6 +9,7 @@ async def set_default_commands(bot: Bot, user_id):
         await bot.set_my_commands(
             commands=[
                 BotCommand('remove_user', 'Удалить водителя из базы'),
+                BotCommand('users', 'Список водителей')
             ],
             scope=BotCommandScopeChat(user_id)
         )

@@ -4,7 +4,25 @@ from tgbot.models.models import User
 from tgbot.services.api_requests import phone_formatting
 
 
+async def get_user_unique_phone(session, phone):
+    """Получить одного пользователя по telegram_id."""
+    user_phone = phone_formatting(phone)
+    result = (await session.execute(select(
+        User.first_name, User.middle_name, User.taxi_id
+    ).where(User.phone == user_phone))).fetchone()
+
+    return result
+
+
+async def get_all_users(session):
+    """Получить список пользователей."""
+    result = (await session.execute(select(
+        User.first_name, User.last_name, User.middle_name, User.phone))).fetchall()
+    return result
+
+
 async def get_user(session, user_id):
+    """Получить одного пользователя по telegram_id."""
     result = (await session.execute(select(
         User.first_name, User.middle_name, User.taxi_id
     ).where(User.telegram_id == user_id))).fetchone()
@@ -14,19 +32,23 @@ async def get_user(session, user_id):
 
 async def add_user(session, user):
     """Запрос на добавление в БД."""
-    await session.execute(insert(User).values(
+    result = await session.execute(insert(User).values(
         telegram_id=user.get('telegram_id'),
         first_name=user.get('first_name'),
         last_name=user.get('last_name'),
-        middle_name=user.get('middle_name', '-'),
+        middle_name=user.get('middle_name', ' '),
         phone=user.get('phone'),
-        taxi_id=user.get('taxi_id'))
+        taxi_id=user.get('taxi_id')
+    ).returning(
+        User.first_name, User.last_name, User.middle_name)
     )
     await session.commit()
+    return result.first()
 
 
 async def drop_user(session, phone, state):
     """Запрос на удаление из БД."""
+
     # проверка номер телеофна на соответствие.
     user_phone = phone_formatting(phone)
     # проверяем есть ли такой пользователь

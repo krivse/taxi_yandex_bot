@@ -11,6 +11,6 @@ class User(Base):
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
     middle_name = Column(String)
-    phone = Column(BigInteger, nullable=False)
+    phone = Column(BigInteger, nullable=False, unique=True)
     taxi_id = Column(String, nullable=False)
     at_created = Column(DateTime(timezone=True), server_default=func.now())
