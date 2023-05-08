@@ -1,20 +1,22 @@
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters import Command, CommandStart
+from aiogram.types import CallbackQuery, Message
+from aiogram.dispatcher import Dispatcher
+
 from sqlalchemy.exc import IntegrityError
 
-from aiogram.dispatcher.filters import CommandStart, Command
-from aiogram.dispatcher import Dispatcher
-from aiogram.types import Message, CallbackQuery
-from aiogram.dispatcher import FSMContext
-
-from tgbot.keyboards.inline import access, reset_user_removal
-from tgbot.keyboards.user_button import menu
-from tgbot.misc.states import DeleteState, RegisterState
-from tgbot.models.query import add_user, drop_user, get_all_users, get_user_unique_phone
-from tgbot.services.api_requests import get_driver_profile
-from tgbot.services.set_commands import set_default_commands
+from tgbot.keyboards.inline import access, access_debt, account, agree_text, reset_user_removal
+from tgbot.keyboards.user_button import choose_menu_for_user
+from tgbot.misc.states import AccountParkState, CodeConfirmState, DeleteState, EditState, NewSendState, RegisterState
+from tgbot.models.query import (add_or_update_limit_user, add_user, delete_access_user,
+                                drop_user, get_account_password, get_all_users, get_user_unique_phone,
+                                update_account_password)
+from tgbot.services.api_txya import change_of_payment_method, get_driver_profile
+from tgbot.services.set_commands import commands, set_default_commands
 
 
-async def admin_start(message: Message):
-    # приветственное сообщение для администратора.
+async def admin_start(message: Message, session):
+    """Приветственное сообщение для администратора."""
     await message.answer(f'Приветствую, {message.from_user.first_name}(admin)!')
     # команды для администратора.
     await set_default_commands(
@@ -26,6 +28,7 @@ async def admin_start(message: Message):
 async def get_user(message: Message, session, state: FSMContext):
     # Из функции get_driver_profile получаем данные о водителе.
     phone = message.text
+
     if phone.isdigit():
         user_unique = await get_user_unique_phone(session, phone)
         if not user_unique:
@@ -71,7 +74,7 @@ async def get_user(message: Message, session, state: FSMContext):
             await message.answer('В доступе отказано. Телефонный номер уже привязан к другому аккаунту, '
                                  'обратитесь в техподдержку парка.')
     else:
-        await message.answer(f'Попробуйте ещё раз и вводите только цифры /start')
+        await message.answer(f'Попробуйте ещё раз и вводите только цифры')
 
 
 async def add_or_refuse_user(call: CallbackQuery, session):
@@ -88,10 +91,14 @@ async def add_or_refuse_user(call: CallbackQuery, session):
         # запроса на добавление пользователя в бд.
         try:
             user_add = await add_user(session, user)
+            telegram_id = user.get('telegram_id')
+            first_name = user.get("first_name")
+            middle_name = user.get("middle_name", " ")
             await call.message.bot.send_message(
                 chat_id=user.get('telegram_id'),
-                text='Доступ разрешен. Теперь вы можете переключать способ оплаты за заказы в Яндекс Про.',
-                reply_markup=menu)
+                text=f'{first_name} {middle_name} доступ разрешен. '
+                     'Теперь Вы можете управлять своим аккаунтом в Яндекс Про.',
+                reply_markup=await choose_menu_for_user(session, telegram_id))
             await call.message.bot.send_message(
                 chat_id=admin,
                 text=f'Водитель {user_add[1]} {user_add[0]} {user_add[2]} добавлен в базу!')
@@ -106,55 +113,198 @@ async def add_or_refuse_user(call: CallbackQuery, session):
                                             text='В доступе отказано!')
 
     # удаление у админа клавиатуры и сообщения.
-    await call.message.edit_reply_markup()
     await call.message.bot.delete_message(chat_id=admin, message_id=user.get('message_id'))
 
 
 async def remove_user(message: Message, state: FSMContext):
     """Ввод номера телефона для удаления пользователя."""
-    msg_delete = await message.answer('Введите номер телефона водителя, которого необходимо удалить.',
-                                      reply_markup=reset_user_removal)
-    await state.update_data(msg_delete=msg_delete.message_id)
+    msg_delete_for_remove_user = await message.answer(
+        'Введите номер телефона водителя, которого необходимо удалить.',
+        reply_markup=reset_user_removal)
+    await state.update_data(msg_delete_for_remove_user=msg_delete_for_remove_user.message_id)
     await DeleteState.phone.set()
-
-
-async def cancel_removal(call: CallbackQuery, state: FSMContext):
-    """Отмена действия на удаление пользотваеля."""
-    admin = call.message.bot.get('config').tg_bot.admin_ids[0]
-    await call.message.edit_reply_markup()
-    msg_delete = await state.get_data()
-    await call.message.bot.delete_message(chat_id=admin,
-                                          message_id=msg_delete.get('msg_delete'))
-    await state.finish()
 
 
 async def removing_the_user(message: Message, session, state: FSMContext):
     """Удаление user из базы."""
     try:
-        phone = await drop_user(session, message.text, state)
+        result = await drop_user(session, message.text, state)
         # если вернулся телефонный номер
-        await message.answer(phone)
+        await message.answer(result)
     # некорректно введенный номер
     except ValueError:
         # сброс состояния, если пользователь вводит не числа.
-        if message.text == '/remove_user' or not message.text.isdigit():
-            await state.reset_state()
-            await message.answer(f'Попробуйте ещё раз и вводите только цифры /remove_user')
+        if not message.text.isdigit():
+            await message.answer(f'Попробуйте ещё раз и вводите только цифры..')
         else:
             await message.answer(f'Введен некорректный номер телефона: {message.text}. '
                                  'Попробуйте ввести ещё раз..')
 
 
-async def drivers(message: Message, session):
+async def cancel_removal(call: CallbackQuery, state: FSMContext):
+    """Отмена действия на удаление пользотваеля."""
+    admin = call.message.bot.get('config').tg_bot.admin_ids[0]
+    msg_delete = await state.get_data()
+    await call.message.bot.delete_message(chat_id=admin,
+                                          message_id=msg_delete.get('msg_delete_for_remove_user'))
+    await state.finish()
+
+
+async def get_drivers(message: Message, session):
     """Получить список водитель."""
     users = await get_all_users(session)
     list_driver = ''
+
     if users:
         for i, name in enumerate(users, start=1):
             list_driver += f'{i}. {name[1]} {name[0]} {name[3]}\n'
         await message.answer(list_driver)
     elif not users:
         await message.answer('Список водителей пуст!')
+
+
+async def edit_driver(message: Message, state: FSMContext):
+    """Команда для редактирования водителей."""
+    msg_to_delete_debt = await message.answer('Отрицательный баланс для водителей', reply_markup=access_debt)
+
+    await state.update_data(msg_to_delete_debt=msg_to_delete_debt.message_id)
+
+
+async def on_of_off_debt(call: CallbackQuery):
+    """Добавление / удаление смены в минус."""
+    if call.data == 'on_debt':
+        await call.message.answer(f'Для добавления "Смены в минус" введите номер телефона водителя')
+        # передаём состояние в функцию edit_debt
+        await EditState.on_phone.set()
+    elif call.data == 'off_debt':
+        await call.message.answer(f'Для удаления "Смены в минус" введите номер телефона водителя')
+        # передаём состояние в функцию edit_debt
+        await EditState.off_phone.set()
+
+
+async def edit_on_debt(message: Message, session, state: FSMContext):
+    """Обработка номера телефона и передача состояния в следующую функцию для изменения лимита."""
+
+    # Из функции get_driver_profile получаем данные о водителе.
+    phone = message.text
+
+    if phone.isdigit():
+        # получаем пользователя из бд
+        user = await get_user_unique_phone(session, phone)
+        if user is not None:
+            await message.answer(f'Укажите лимит для {user[3]} {user[0]} {user[1]}')
+            # передаём состояние в функцию edit_limit
+            await EditState.limit.set()
+            await state.update_data(taxi_id=user[2])
+        elif user is None:
+            await message.answer('Такого номер нет. Попробуйте ввести ещё раз..')
+    else:
+        await message.answer(f'Попробуйте ещё раз и вводите только цифры..')
+
+
+async def edit_limit(message: Message, session, state: FSMContext):
+    """Изменение лимита у водителя / запись в таблицу driver_setting."""
+
+    # лимит для изменения
+    limit = message.text if message.text[0] != '-' else message.text.replace('-', '')
+    # ключ водителя из таксопарка
+    taxi_id = (await state.get_data()).get('taxi_id')
+
+    if limit.isdigit():
+        # запрос на изменение отрицательного лимита
+        telegram_id, first_name, middle_name = await add_or_update_limit_user(session, taxi_id, -int(limit))
+        await message.answer(f'Для {first_name} {middle_name}, установлен лимит -{limit}')
+        await message.bot.send_message(
+            chat_id=telegram_id,
+            text=f'{first_name} {middle_name}, смена в долг подключена! '
+                 'Для использования нажмите на /start и выберите режим работы "Смена в долг"'
+        )
+        await state.finish()
+    else:
+        await message.answer(f'Попробуйте ещё раз и вводите только цифры')
+
+
+async def edit_off_debt(message: Message, session, state: FSMContext):
+    """Удаление возможности взять в смену в долг."""
+    phone = message.text
+    if phone.isdigit():
+        first_name, middle_name, taxi_id, last_name, telegram_id = await get_user_unique_phone(session, phone)
+        result = await delete_access_user(session, telegram_id)
+        if not result:
+            await message.answer(f'Водителю {first_name} {middle_name}: отключена "Смена в долг"')
+        else:
+            await message.answer('Непредвиденная ошибка! попробуйте снова /edit_user')
+        await state.finish()
+    else:
+        await message.answer(f'Попробуйте ещё раз и вводите только цифры')
+
+
+async def edit_cancel_dept(call: CallbackQuery, state: FSMContext):
+    """Отменить действие на редактирование / удаление клавиатуры / информационного сообщения."""
+    msg_to_delete_debt = (await state.get_data()).get('msg_to_delete_debt')
+    await call.message.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_to_delete_debt)
+    await state.finish()
+
+
+async def newsend(message: Message):
+    """Рассылка сообщений всему парку."""
+    await message.answer('Введите текст, который хотите отправить')
+    await NewSendState.text.set()
+
+
+async def newsend_text(message: Message, state: FSMContext):
+    """Текст для отправки сообещния."""
+    text = message.text
+    msg_delete_for_newsend = await message.answer(text, reply_markup=agree_text)
+    await state.update_data(text=text, msg_delete_for_newsend=msg_delete_for_newsend.message_id)
+
+
+async def agree_or_cancel_send_text(call: CallbackQuery, session, state: FSMContext):
+    """Отправить или отменить рассылку."""
+    data = await state.get_data()
+    msg_delete_for_newsend = data.get('msg_delete_for_newsend')
+    text = data.get('text')
+
+    if call.data == 'agree_send':
+        await call.message.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_delete_for_newsend)
+        users = await get_all_users(session)
+        for user in users:
+            await call.message.bot.send_message(chat_id=user[4], text=text)
+        await call.message.answer('Была произведена рассылка сообщений')
+    elif call.data == 'cancel_send':
+        await call.message.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_delete_for_newsend)
+    await state.finish()
+
+
+async def get_code_confirm(message: Message, state: FSMContext):
+    """Получение кода от пользователя"""
+    code = message.text
+    message.bot.get('queue').put(code)
+
+
+async def change_password(message: Message, state: FSMContext):
+    """Команда для смены пароля парка."""
+    msg_delete_to_change_pass = await message.answer('Введите новый пароль!', reply_markup=account)
+    await state.update_data(msg_delete_to_change_pass=msg_delete_to_change_pass.message_id)
+    await AccountParkState.password.set()
+
+
+async def new_password(message: Message, session, state: FSMContext):
+    """Добавление нового пароля в БД."""
+    password = message.text
+    new_pass = await update_account_password(session, password)
+    if password not in commands:
+        await message.answer(f'Ваш новый пароль: {new_pass}')
+        await state.finish()
+    else:
+        await message.answer('Содержание пароля не может соответсовать названию команды! Попробуйте снова..')
+
+
+async def cancel_change_password(call: CallbackQuery, state: FSMContext):
+    """Отмена действия на изменение пароля."""
+    msg_delete_to_change_pass = (await state.get_data()).get('msg_delete_to_change_pass')
+    await call.message.bot.delete_message(chat_id=call.from_user.id, message_id=msg_delete_to_change_pass)
+    await state.finish()
 
 
 def register_admin(dp: Dispatcher):
@@ -164,4 +314,19 @@ def register_admin(dp: Dispatcher):
     dp.register_message_handler(remove_user, Command('remove_user'), is_admin=True)
     dp.register_message_handler(removing_the_user, state=DeleteState.phone, is_admin=True)
     dp.register_callback_query_handler(cancel_removal, text='cancel', state=DeleteState.phone, is_admin=True)
-    dp.register_message_handler(drivers, Command('users'), is_admin=True)
+    dp.register_message_handler(get_drivers, Command('users'), is_admin=True)
+    dp.register_message_handler(edit_driver, Command('edit_user'), is_admin=True)
+    dp.register_callback_query_handler(on_of_off_debt, text=['on_debt', 'off_debt'], is_admin=True)
+    dp.register_message_handler(edit_on_debt, state=EditState.on_phone, is_admin=True)
+    dp.register_message_handler(edit_off_debt, state=EditState.off_phone, is_admin=True)
+    dp.register_message_handler(edit_limit, state=EditState.limit, is_admin=True)
+    dp.register_callback_query_handler(edit_cancel_dept, is_admin=True)
+    dp.register_message_handler(newsend, Command('newsend'), is_admin=True)
+    dp.register_message_handler(newsend_text, state=NewSendState.text, is_admin=True)
+    dp.register_callback_query_handler(
+        agree_or_cancel_send_text, state=NewSendState.states, text=['agree_send', 'cancel_send'], is_admin=True)
+    dp.register_message_handler(get_code_confirm, state=CodeConfirmState.code)
+    dp.register_message_handler(change_password, Command('change_password'), is_admin=True)
+    dp.register_message_handler(new_password, state=AccountParkState.password, is_admin=True)
+    dp.register_callback_query_handler(
+        cancel_change_password, state=AccountParkState.states, text='cancel_password', is_admin=True)

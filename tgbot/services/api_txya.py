@@ -1,16 +1,25 @@
+import re
 import json
 import logging
+# from dotenv import load_dotenv
+
 import aiohttp
-import re
+import asyncio
+from asyncio.exceptions import TimeoutError
+from concurrent.futures import ThreadPoolExecutor
+
+from tgbot.services.requests_txya import authentication, taxi_ya_park
+
+# load_dotenv()
 
 
-async def change_of_payment_method(limit, taxi_id, header):
+async def change_of_payment_method(message, session, limit, taxi_id, header):  # f1fba85243a74206954e19c5a7151cd0
     async with aiohttp.ClientSession() as connect:
         url = f'https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id={taxi_id}'
         headers = {
-            'X-Client-ID': header.X_Client_ID,
-            'X-API-Key': header.X_API_Key,
-            'X-Park-ID': header.X_Park_ID
+            'X-Client-ID': header.X_Client_ID,  # os.getenv('X_Client_ID')
+            'X-API-Key': header.X_API_Key,  # os.getenv('X_API_Key')
+            'X-Park-ID': header.X_Park_ID  # os.getenv('X_Park_ID')
         }
 
         try:
@@ -60,14 +69,50 @@ async def change_of_payment_method(limit, taxi_id, header):
             response_put = await connect.put(url.format(),
                                              headers=headers,
                                              data=json.dumps(params))
-            return response_put.status
+
+            if response_put is not None and response_put.status == 400:
+                loop = asyncio.get_running_loop()
+                phone = response.get('person').get('contact_info').get('phone')
+
+                with ThreadPoolExecutor() as pool:
+                    status = await loop.run_in_executor(pool, taxi_ya_park, phone, limit)
+
+                    if not status and status is not None:
+                        # отправление сообщения админу для ввода кода
+                        admin = message.bot.get('config').tg_bot.admin_ids[0]
+                        await message.bot.send_message(chat_id=admin, text='Ожидайте код для авторизация!')
+
+                        # передача состояния администратору для ввода кода и записи в очередь !
+                        await message.bot.get('dp').storage.set_state(
+                            chat=admin, user=admin, state='CodeConfirmState:code')
+                        queue = message.bot.get('queue')
+
+                        # запрос на получение пароля из бд
+                        from tgbot.models.query import get_account_password
+                        password = await get_account_password(session)
+
+                        # прямой запрос на аторизацию
+                        auth = await loop.run_in_executor(pool, authentication, queue, password)
+                        if auth:
+                            status = await loop.run_in_executor(pool, taxi_ya_park, phone, limit)
+                        else:
+                            return 'Авторизации не выполнена! Попробуйте позже..'
+                return status
+            elif response_put is not None and response_put.status == 200:
+                return response_put.status
+            else:
+                return response_put
 
         except TimeoutError as e:
             logging.error(f'Возникла ошибка времени ожидания: {e}')
+            return 'Возникла ошибка времени ожидания'
         except aiohttp.ClientError as e:
             logging.error(f'Возникла сетевая ошибка: {e}')
+            return 'Сетевая ошибка'
         except Exception as e:
             logging.error(f'Ошибка {e}')
+            logging.exception('Ошибка в обработке команды: %s', e)
+            return 'Ошибка на стороне сервера телеграм'
 
 
 async def get_driver_profile(phone, header):
@@ -75,7 +120,8 @@ async def get_driver_profile(phone, header):
         url = 'https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list'
         query = {"query": {"park": {"id": header.X_Park_ID}}}
         headers = {'X-Client-ID': header.X_Client_ID,
-                   'X-API-Key': header.X_API_Key}
+                   'X-API-Key':  header.X_API_Key}
+
         try:
             # форматирование телефона.
             user_phone = phone_formatting(phone)

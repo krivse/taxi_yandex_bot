@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import asyncio
 import logging
+from queue import Queue
 
 from aiogram import Bot, Dispatcher
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -49,9 +50,11 @@ async def main():
     dp = Dispatcher(bot, storage=storage)
 
     session_pool = await create_session_pool(db=config.db, echo=False)
+    queue = Queue()
 
     bot['config'] = config
     bot['dp'] = dp
+    bot['queue'] = queue
 
     register_all_middlewares(dp, config, session_pool)
     register_all_filters(dp)
