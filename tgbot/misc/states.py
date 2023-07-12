@@ -25,3 +25,7 @@ class CodeConfirmState(StatesGroup):
 
 class AccountParkState(StatesGroup):
     password = State()
+
+
+class HelpState(StatesGroup):
+    text = State()

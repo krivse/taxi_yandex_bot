@@ -36,6 +36,7 @@ class Miscellaneous:
     X_Client_ID: dict
     X_API_Key: dict
     X_Park_ID: dict
+    X_Idempotency_Token: dict
 
 
 @dataclass
@@ -65,6 +66,7 @@ def load_config(path: str = None):
         misc=Miscellaneous(
             X_Client_ID=env.str('X_Client_ID'),
             X_API_Key=env.str('X_API_Key'),
-            X_Park_ID=env.str('X_Park_ID')
+            X_Park_ID=env.str('X_Park_ID'),
+            X_Idempotency_Token=env.str('X_Idempotency_Token')
         )
     )

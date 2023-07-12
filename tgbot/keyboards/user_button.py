@@ -1,6 +1,6 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-from tgbot.models.query import access_debt_mode, add_or_update_limit_user, delete_access_user
+from tgbot.models.query import access_debt_mode
 
 
 async def choose_menu_for_user(session, telegram_id):
@@ -12,8 +12,17 @@ async def choose_menu_for_user(session, telegram_id):
         menu = ReplyKeyboardMarkup(
             keyboard=[
                 [
-                    KeyboardButton(text='Безнал'),
-                    KeyboardButton(text='Нал / Безнал'),
+                    KeyboardButton(text='💳Безнал'),
+                    KeyboardButton(text='💵Нал / Безнал'),
+                ],
+                [
+                    KeyboardButton(text='🏁Завершить тек. заказ'),
+                    KeyboardButton(text='❌Отменить текущий заказ')
+                 ],
+                [
+                    KeyboardButton(text='📈Неоплаченные заказы'),
+                    KeyboardButton(text='💰Заработок'),
+                    KeyboardButton(text='📝Справка')
                 ]
             ],
             resize_keyboard=True
@@ -25,9 +34,13 @@ async def choose_menu_for_user(session, telegram_id):
         menu_plus = ReplyKeyboardMarkup(
             keyboard=[
                 [
-                    KeyboardButton(text='Безнал'),
-                    KeyboardButton(text='Нал / Безнал'),
-                    KeyboardButton(text='Смена в долг')
+                    KeyboardButton(text='💳Безнал'),
+                    KeyboardButton(text='💵Нал / Безнал'),
+                    KeyboardButton(text='🕰Смена в долг')
+                ],
+                [
+                    KeyboardButton(text='🏁Завершить тек. заказ'),
+                    KeyboardButton(text='❌Отменить текущий заказ')
                 ]
             ],
             resize_keyboard=True

@@ -5,17 +5,18 @@ from aiogram.dispatcher import Dispatcher
 
 from sqlalchemy.exc import IntegrityError
 
-from tgbot.keyboards.inline import access, access_debt, account, agree_text, reset_user_removal
+from tgbot.keyboards.inline_admin import access, access_debt, account, agree_text, reset_user_removal, help_keyboard
 from tgbot.keyboards.user_button import choose_menu_for_user
-from tgbot.misc.states import AccountParkState, CodeConfirmState, DeleteState, EditState, NewSendState, RegisterState
-from tgbot.models.query import (add_or_update_limit_user, add_user, delete_access_user,
-                                drop_user, get_account_password, get_all_users, get_user_unique_phone,
+from tgbot.misc.states import AccountParkState, CodeConfirmState, DeleteState, EditState, HelpState, NewSendState, \
+    RegisterState
+from tgbot.models.query import (add_or_update_limit_user, add_or_update_text_for_help, add_user, delete_access_user,
+                                drop_user, get_all_users, get_user_unique_phone,
                                 update_account_password)
-from tgbot.services.api_txya import change_of_payment_method, get_driver_profile
+from tgbot.services.api.get_list_drivers import get_driver_profile
 from tgbot.services.set_commands import commands, set_default_commands
 
 
-async def admin_start(message: Message, session):
+async def admin_start(message: Message):
     """Приветственное сообщение для администратора."""
     await message.answer(f'Приветствую, {message.from_user.first_name}(admin)!')
     # команды для администратора.
@@ -269,15 +270,19 @@ async def agree_or_cancel_send_text(call: CallbackQuery, session, state: FSMCont
         await call.message.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_delete_for_newsend)
         users = await get_all_users(session)
         for user in users:
-            await call.message.bot.send_message(chat_id=user[4], text=text)
+            from aiogram.utils.exceptions import BotBlocked
+            try:
+                await call.message.bot.send_message(chat_id=user[4], text=text)
+            except BotBlocked as e:
+                print('BOTBLOCKED', user[1], user[2], user[3], user[4])
         await call.message.answer('Была произведена рассылка сообщений')
     elif call.data == 'cancel_send':
         await call.message.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_delete_for_newsend)
     await state.finish()
 
 
-async def get_code_confirm(message: Message, state: FSMContext):
-    """Получение кода от пользователя"""
+async def get_code_confirm(message: Message):
+    """Получение кода от пользователя."""
     code = message.text
     message.bot.get('queue').put(code)
 
@@ -307,6 +312,66 @@ async def cancel_change_password(call: CallbackQuery, state: FSMContext):
     await state.finish()
 
 
+async def configure_help(message: Message):
+    """Команда для редактирования текста справки."""
+    await message.answer('Введите текст, который нужно добавить или обновить')
+    await HelpState.text.set()
+
+
+async def enter_text_for_help(message: Message, state: FSMContext):
+    """Ввод текста для команды /configure_help."""
+    text = message.text
+    text_for_delete_help = message.message_id
+
+    if text not in commands:
+        # Отправка текста и клавиатуры для подтверждения или отмены операции
+        msg_delete = await message.answer(text=text, reply_markup=help_keyboard)
+        await state.update_data(
+            message_for_delete_help=msg_delete.message_id,
+            text_for_delete_help=text_for_delete_help,
+            text_help=text
+        )
+        await state.reset_state(with_data=False)
+    else:
+        await message.answer(f'Вы ввели название команды {message.text}... Операция отменена.\n'
+                             'Вызовите команду повторно и вводите текст отличающийся от названия команды')
+        await state.finish()
+
+
+async def confirm_text_for_help(call: CallbackQuery, session, state: FSMContext):
+    """Подтверждение ввода текста и запись в бд."""
+    data = await state.get_data()
+
+    # message_id's для удаления временных сообщений
+    msg_for_delete = data.get('message_for_delete_help')
+    text_for_delete = data.get('text_for_delete_help')
+
+    # запись данных
+    text = data.get('text_help')
+    text = await add_or_update_text_for_help(session, text)
+    await call.message.answer('Проверьте текст и при необходимости воспользуйтесь командой повторно /configure_help\n'
+                              f'{text}')
+
+    # удаление временных сообщений
+    await call.message.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_for_delete)
+    await call.message.bot.delete_message(chat_id=call.message.chat.id, message_id=text_for_delete)
+    await state.finish()
+
+
+async def cancel_text_for_help(call: CallbackQuery, state: FSMContext):
+    """Отмена действия по вводу текста для /configure_help."""
+    data = await state.get_data()
+
+    # message_id's для удаления временных сообщений
+    msg_for_delete = data.get('message_for_delete_help')
+    text_for_delete = data.get('text_for_delete_help')
+
+    # удаление временных сообщений
+    await call.message.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_for_delete)
+    await call.message.bot.delete_message(chat_id=call.message.chat.id, message_id=text_for_delete)
+    await state.finish()
+
+
 def register_admin(dp: Dispatcher):
     dp.register_message_handler(admin_start, CommandStart(), state='*', is_admin=True)
     dp.register_message_handler(get_user, state=RegisterState.phone)
@@ -320,7 +385,7 @@ def register_admin(dp: Dispatcher):
     dp.register_message_handler(edit_on_debt, state=EditState.on_phone, is_admin=True)
     dp.register_message_handler(edit_off_debt, state=EditState.off_phone, is_admin=True)
     dp.register_message_handler(edit_limit, state=EditState.limit, is_admin=True)
-    dp.register_callback_query_handler(edit_cancel_dept, is_admin=True)
+    dp.register_callback_query_handler(edit_cancel_dept, text='cancel_debt', is_admin=True)
     dp.register_message_handler(newsend, Command('newsend'), is_admin=True)
     dp.register_message_handler(newsend_text, state=NewSendState.text, is_admin=True)
     dp.register_callback_query_handler(
@@ -330,3 +395,7 @@ def register_admin(dp: Dispatcher):
     dp.register_message_handler(new_password, state=AccountParkState.password, is_admin=True)
     dp.register_callback_query_handler(
         cancel_change_password, state=AccountParkState.states, text='cancel_password', is_admin=True)
+    dp.register_message_handler(configure_help, Command('configure_help'), is_admin=True)
+    dp.register_message_handler(enter_text_for_help, state=HelpState.text, is_admin=True)
+    dp.register_callback_query_handler(confirm_text_for_help, text='confirm_help', is_admin=True)
+    dp.register_callback_query_handler(cancel_text_for_help, text='cancel_help', is_admin=True)

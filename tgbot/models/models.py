@@ -1,5 +1,5 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, DateTime, BigInteger, func, Integer, ForeignKey, Boolean, SmallInteger
+from sqlalchemy import Column, String, DateTime, BigInteger, func, Integer, ForeignKey, Boolean, SmallInteger, Text
 from sqlalchemy.orm import relationship
 
 Base = declarative_base()
@@ -26,6 +26,7 @@ class DriverSettings(Base):
     telegram_id = Column(BigInteger, ForeignKey('users.telegram_id', ondelete='CASCADE'))
     limit = Column(SmallInteger, default=None)
     access_limit = Column(Boolean, default=False)
+    url_driver_limit = Column(String, default=None)
 
     user = relationship('User', back_populates='driver_settings')
 
@@ -34,3 +35,9 @@ class AccountPark(Base):
     __tablename__ = 'account_park'
     id = Column(Integer, primary_key=True)
     password = Column(String)
+
+
+class Help(Base):
+    __tablename__ = 'help'
+    id = Column(Integer, primary_key=True)
+    text = Column(String)

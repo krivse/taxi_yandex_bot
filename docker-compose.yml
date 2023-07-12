@@ -25,12 +25,12 @@ services:
     working_dir: "/usr/src/app/${BOT_NAME:-tg_bot}"
     volumes:
     - .:/usr/src/app/${BOT_NAME:-tg_bot}
-    command: bash -c "alembic upgrade head && python3 -m bot"
+    command: bash -c "alembic revision --autogenerate -m 'create table' && alembic upgrade head && python3 -m bot"
     restart: always
     env_file:
       - .env
     networks:
-    - tg_bot
+      - tg_bot
     depends_on:
       - db
 

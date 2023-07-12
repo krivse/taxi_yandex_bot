@@ -46,3 +46,12 @@ account = InlineKeyboardMarkup(
         ],
     ]
 )
+
+help_keyboard = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(text='Да', callback_data='confirm_help'),
+            InlineKeyboardButton(text='Нет', callback_data='cancel_help')
+        ]
+    ]
+)

@@ -7,7 +7,8 @@ commands = [
     '/users',
     '/edit_user',
     '/newsend',
-    '/change_password'
+    '/change_password',
+    '/configure_help'
 ]
 
 
@@ -22,6 +23,7 @@ async def set_default_commands(bot: Bot, user_id):
                 BotCommand('edit_user', 'Редактировать водителя'),
                 BotCommand('newsend', 'Рассылка писем'),
                 BotCommand('change_password', 'Изменить пароль'),
+                BotCommand('configure_help', 'Справка')
             ],
             scope=BotCommandScopeChat(user_id)
         )

@@ -1,7 +1,97 @@
 from sqlalchemy import delete, insert, select, update
 
-from tgbot.models.models import User, DriverSettings, AccountPark
-from tgbot.services.api_txya import phone_formatting
+from tgbot.models.models import User, DriverSettings, AccountPark, Help
+from tgbot.services.other_functions.phone_formatter import phone_formatting
+
+
+async def get_info_from_help(session):
+    """Получение поля text из таблицы Help."""
+    exists = await session.get(Help, 1)
+
+    return exists
+
+
+async def add_or_update_text_for_help(session, text):
+    """Добавление текста для команды /configure_help."""
+    exists = await get_info_from_help(session)
+
+    if exists is None:
+        result = await session.execute(
+            insert(
+                Help
+            ).values(
+                text=text
+            ).returning(Help.text)
+        )
+        await session.commit()
+        return result.fetchone()[0]
+
+    elif exists is not None:
+        result = await session.execute(
+            update(
+                Help
+            ).where(
+                Help.id == exists.id
+            ).values(
+                text=text
+            ).returning(Help.text)
+        )
+
+        await session.commit()
+        return result.fetchone()[0]
+
+
+async def add_url_driver(session, driver_url, phone):
+    """Добавление url страницы водителя парка."""
+    user = (await session.execute(
+        select(
+            DriverSettings.telegram_id
+        ).join(
+            User
+        ).where(
+            User.phone == phone
+        ).union_all(
+            select(
+                User.telegram_id
+            ).where(
+                User.phone == phone)
+        ))).fetchall()
+
+    # если записи нет в driver_settings, то она создается
+    if len(user) == 1:
+        await session.execute(
+            insert(
+                DriverSettings
+            ).values(
+                telegram_id=user[0][0],
+                url_driver_limit=driver_url
+            ))
+    # если такая запись есть, то она обновляется
+    elif len(user) > 1:
+        await session.execute(
+            update(
+                DriverSettings
+            ).where(
+                DriverSettings.telegram_id == user[0][0]
+            ).values(
+                url_driver_limit=driver_url
+            ))
+
+    await session.commit()
+
+
+async def get_url_driver_limit(session, phone):
+    """Получить url страницы водителя в парке / вкладка "Детали"."""
+    result = (await session.execute(
+        select(
+            DriverSettings.url_driver_limit
+        ).join(
+            User
+        ).where(
+            User.phone == phone
+        ))).fetchone()
+
+    return result
 
 
 async def update_account_password(session, password):
@@ -15,29 +105,30 @@ async def update_account_password(session, password):
             ).values(
                 password=password
             ).returning(AccountPark.password))).scalar()
+
+        await session.commit()
+        return result
+
     if exists is not None:
         result = (await session.execute(
             update(
                 AccountPark
             ).where(
-                AccountPark.id == 1
+                AccountPark.id == exists.id
             ).values(
                 password=password
             ).returning(AccountPark.password))).scalar()
 
-    await session.commit()
-    return result
+        await session.commit()
+        return result
 
 
 async def get_account_password(session):
     """Получение пароля парка."""
     result = (await session.get(
-        AccountPark, 1))
+        AccountPark, 6))
 
-    if result is None:
-        return result
-    elif result is not None:
-        return result.password
+    return result
 
 
 async def delete_access_user(session, telegram_id):
@@ -57,7 +148,7 @@ async def delete_access_user(session, telegram_id):
 async def add_or_update_limit_user(session, taxi_id, limit):
     """Добавление или обновление записи водителя с лимитом."""
 
-    # возращается две записи из бд, если в обоих таблицах есть связаная запись.
+    # возращается две записи из бд, если в обеих таблицах есть связанная запись.
     user = (await session.execute(
         select(
             DriverSettings.telegram_id, User.first_name, User.middle_name
@@ -126,13 +217,14 @@ async def get_all_users(session):
     """Получить список пользователей."""
     result = (await session.execute(select(
         User.first_name, User.last_name, User.middle_name, User.phone, User.telegram_id))).fetchall()
+
     return result
 
 
 async def get_user(session, user_id):
     """Получить одного пользователя по telegram_id."""
     result = (await session.execute(select(
-        User.first_name, User.middle_name, User.taxi_id
+        User.first_name, User.middle_name, User.taxi_id, User.phone
     ).where(User.telegram_id == user_id))).fetchone()
 
     return result
@@ -151,6 +243,7 @@ async def add_user(session, user):
         User.first_name, User.last_name, User.middle_name)
     )
     await session.commit()
+
     return result.first()
 
 
