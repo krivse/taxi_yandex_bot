@@ -11,8 +11,6 @@ from tgbot.services.other_functions.phone_formatter import phone_formatting
 from tgbot.services.requests.authentication import authentication_requests
 from tgbot.services.requests.order.work_with_order import working_order_requests
 
-# working_order_by_url_driver_requests
-
 from aiogram.types import Message
 # load_dotenv()
 

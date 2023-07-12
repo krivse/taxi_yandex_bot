@@ -178,12 +178,3 @@ def unpaid_orders_requests(phone, interval, url=None):
     finally:
         browser.close()
         browser.quit()
-
-
-# interval = {
-#     импорт константы из tgbot.services.other_functions.conts
-#     'start_day': '7', 'start_month': 'июнь',
-    # 'end_day': '10', 'end_month': 'июль',
-# }
-#
-# unpaid_orders_requests('79156798099', None)

@@ -5,15 +5,9 @@ import asyncio
 from asyncio.exceptions import TimeoutError
 from concurrent.futures import ThreadPoolExecutor
 
-from tgbot.keyboards.inline_users import order_processing
 from tgbot.models.query import add_url_driver
 from tgbot.services.other_functions.phone_formatter import phone_formatting
 from tgbot.services.requests.authentication import authentication_requests
-
-# working_order_by_url_driver_requests
-
-from aiogram.types import Message
-
 from tgbot.services.requests.unpaid_orders.unpaid_orders import unpaid_orders_requests
 
 
