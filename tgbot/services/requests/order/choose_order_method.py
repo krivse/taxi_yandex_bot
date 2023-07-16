@@ -8,14 +8,13 @@ from concurrent.futures import ThreadPoolExecutor
 from tgbot.keyboards.inline_users import order_processing
 from tgbot.models.query import add_url_driver
 from tgbot.services.other_functions.phone_formatter import phone_formatting
-from tgbot.services.requests.authentication import authentication_requests
+from tgbot.services.requests.authentication import authentication_requests, send_code_bot
 from tgbot.services.requests.order.work_with_order import working_order_requests
 
 from aiogram.types import Message
-# load_dotenv()
 
 
-async def change_working_order_method(obj, session, state, phone, way, amount):  # f1fba85243a74206954e19c5a7151cd0
+async def change_working_order_method(obj, session, state, phone, way, amount):
     """
     Работа запросов по завершению заказов у водителей.
     Обработка запросов в отдельном потоке.
@@ -26,74 +25,52 @@ async def change_working_order_method(obj, session, state, phone, way, amount): 
             # вход на страницу водителя по его id
             from tgbot.models.query import get_url_driver_limit
             format_phone = phone_formatting(phone)
-            url_driver_order = await get_url_driver_limit(session, format_phone)
+            url_driver = await get_url_driver_limit(session, format_phone)
             # если id нет, то выполняется вход с дальнейшей записью id водителя в бд,
             # ссылка на заказ для дальнейшего завершения
-            status = None
-            msg_for_delete_current_order = (await state.get_data()).get('msg_for_delete_current_order')
-            if url_driver_order is None:
-                status, url_driver_order, amount, number_order,\
-                    description, address, empty_order = await loop.run_in_executor(
+            if url_driver is None:
+                request = await loop.run_in_executor(
                         pool, working_order_requests, phone, way, amount)
-                await add_url_driver(session, url_driver_order, int(phone))
 
-                if empty_order is not None:
-                    if isinstance(obj, Message):
-                        await obj.answer(empty_order)
-                    else:
-                        await obj.message.answer(empty_order)
-                elif empty_order is None:
-                    await amount_order(obj, way, state, number_order, description, address, amount)
-
-                await obj.bot.delete_message(chat_id=obj.chat.id, message_id=msg_for_delete_current_order)
+                if request.get('status') != 401:
+                    await add_url_driver(session, request.get('url_driver'), int(phone))
+                    await complete_or_empty_order(obj, way, state, request)
+                    return request
+                else:
+                    logging.error(
+                        'Возникла ошибка связанная скорее всего с отсутствием элемента на странице',
+                        request.get('status')
+                    )
 
             # если id водителя есть, то сразу получаем доступ к странице водителя
-            elif url_driver_order is not None:
-                status, url_driver_order, amount, number_order, \
-                    description, address, empty_order = await loop.run_in_executor(
-                        pool, working_order_requests, phone, way, amount, url_driver_order[0])
+            elif url_driver is not None:
+                request = await loop.run_in_executor(
+                        pool, working_order_requests, phone, way, amount, url_driver[0])
 
-                if empty_order is not None:
-                    if isinstance(obj, Message):
-                        await obj.answer(empty_order)
-                    else:
-                        await obj.message.answer(empty_order)
-                elif empty_order is None:
-                    await amount_order(obj, way, state, number_order, description, address, amount)
-                await obj.bot.delete_message(chat_id=obj.chat.id, message_id=msg_for_delete_current_order)
-
-            if not status and status is not None:
-                # отправление сообщения админу для ввода кода
-                if isinstance(obj, Message):
-                    admin = obj.bot.get('config').tg_bot.admin_ids[0]
-                    await obj.bot.send_message(chat_id=admin, text='Ожидайте код для авторизация!')
-
-                    # передача состояния администратору для ввода кода и записи в очередь !
-                    await obj.bot.get('dp').storage.set_state(
-                        chat=admin, user=admin, state='CodeConfirmState:code')
-                    queue = obj.bot.get('queue')
+                if request.get('status') != 401:
+                    await complete_or_empty_order(obj, way, state, request)
+                    return request
                 else:
-                    admin = obj.message.bot.get('config').tg_bot.admin_ids[0]
-                    await obj.message.bot.send_message(chat_id=admin, text='Ожидайте код для авторизация!')
+                    logging.error(
+                        'Возникла ошибка связанная скорее всего с отсутствием элемента на странице',
+                        request.get('status')
+                    )
 
-                    # передача состояния администратору для ввода кода и записи в очередь !
-                    await obj.message.bot.get('dp').storage.set_state(
-                        chat=admin, user=admin, state='CodeConfirmState:code')
-                    queue = obj.bot.get('queue')
-                # запрос на получение пароля из бд
-                from tgbot.models.query import get_account_password
-                password = await get_account_password(session)
-
+            if request.get('status') == 401:
+                # получение кода для авторизации
+                password, queue = await send_code_bot(obj, session)
                 # прямой запрос на авторизацию
                 auth = await loop.run_in_executor(pool, authentication_requests, queue, password)
                 if auth:
-                    status, url_driver_order = await loop.run_in_executor(
+                    request = await loop.run_in_executor(
                         pool, working_order_requests, phone, way, amount)
-                    await add_url_driver(session, url_driver_order, int(phone))
+
+                    if request.get('status') != 401:
+                        await complete_or_empty_order(obj, way, state, request)
+                        return request
                 else:
                     return 'Авторизации не выполнена! Попробуйте позже..'
 
-            return status
     except TimeoutError as e:
         logging.error(f'Возникла ошибка времени ожидания: {e}')
         return 'Возникла ошибка времени ожидания'
@@ -106,7 +83,33 @@ async def change_working_order_method(obj, session, state, phone, way, amount): 
         return 'Ошибка на стороне сервера телеграм'
 
 
-async def amount_order(obj, way, state, number_order, description, address, amount):
+async def complete_or_empty_order(obj, way, state, request):
+    """Работа с пустыми и непустыми заказами."""
+    msg_for_delete_current_order = (await state.get_data()).get('msg_for_delete_current_order')
+    if msg_for_delete_current_order is not None:
+        if isinstance(obj, Message):
+            await obj.bot.delete_message(chat_id=obj.chat.id,
+                                         message_id=msg_for_delete_current_order)
+        else:
+            await obj.bot.delete_message(chat_id=obj.message.chat.id,
+                                         message_id=msg_for_delete_current_order)
+    if request.get('empty_order') is not None:
+        if isinstance(obj, Message):
+            await obj.answer(request.get('empty_order'))
+        else:
+            await obj.message.answer(request.get('empty_order'))
+
+    elif request.get('empty_order') is None:
+        await amount_order(
+            obj, way, state,
+            request.get('number_order'),
+            request.get('description'),
+            request.get('address'),
+            request.get('price')
+        )
+
+
+async def amount_order(obj, way, state, number_order, description, address, price):
     """Ввод клавиатуры с кнопками и суммой заказа по фикс. цене / таксометру."""
     if way == 'amount':
         if isinstance(obj, Message):
@@ -115,10 +118,9 @@ async def amount_order(obj, way, state, number_order, description, address, amou
                      f'Тариф {description[0]}\n'
                      f'Тип оплаты {description[1]}\n'
                      f'Адрес заказа {address}',
-                reply_markup=order_processing(amount)
+                reply_markup=order_processing(price)
             )
             await state.update_data(msg_order_delete=msg_order_delete.message_id)
-            await asyncio.sleep(10)
             await obj.delete()
 
         else:
@@ -127,8 +129,7 @@ async def amount_order(obj, way, state, number_order, description, address, amou
                      f'Тариф {description[0]}\n'
                      f'Тип оплаты {description[1]}\n'
                      f'Адрес заказа {address}',
-                reply_markup=order_processing(amount)
+                reply_markup=order_processing(price)
             )
             await state.update_data(msg_order_delete=msg_order_delete.message_id)
-            await asyncio.sleep(10)
             await obj.message.delete()

@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from tgbot.models.query import add_url_driver
 from tgbot.services.other_functions.phone_formatter import phone_formatting
-from tgbot.services.requests.authentication import authentication_requests
+from tgbot.services.requests.authentication import authentication_requests, send_code_bot
 from tgbot.services.requests.earnings.eranings_driver import earnings_driver_requests
 
 
@@ -28,42 +28,33 @@ async def settings_for_select_period_earnings_driver(obj, session, phone, interv
 
             # если id нет, то выполняется вход с дальнейшей записью id водителя в бд,
             # ссылка на заказ для дальнейшего завершения
-            status = None
             if url_driver_order is None:
-                status, url_driver_order, earnings_list = await loop.run_in_executor(
+                request = await loop.run_in_executor(
                     pool, earnings_driver_requests, phone, interval
                 )
-                await add_url_driver(session, url_driver_order, int(phone))
+                if request.get('status') != 401:
+                    await add_url_driver(session, request.get('url_driver'), int(phone))
+                    return request
 
             elif url_driver_order is not None:
-                status, url_driver_order, earnings_list = await loop.run_in_executor(
+                request = await loop.run_in_executor(
                     pool, earnings_driver_requests, phone, interval, url_driver_order[0])
+                if request.get('status') != 401:
+                    return request
 
-            if not status and status is not None:
-                # отправление сообщения админу для ввода кода
-                admin = obj.message.bot.get('config').tg_bot.admin_ids[0]
-                await obj.message.bot.send_message(chat_id=admin, text='Ожидайте код для авторизация!')
-                # передача состояния администратору для ввода кода и записи в очередь !
-                await obj.message.bot.get('dp').storage.set_state(
-                    chat=admin, user=admin, state='CodeConfirmState:code')
-                queue = obj.bot.get('queue')
-                # запрос на получение пароля из бд
-                from tgbot.models.query import get_account_password
-                password = await get_account_password(session)
-
+            if request.get('status') == 401:
+                # получение кода для авторизации
+                password, queue = await send_code_bot(obj, session)
                 # прямой запрос на авторизацию
                 auth = await loop.run_in_executor(pool, authentication_requests, queue, password)
                 if auth:
-                    status, url_driver_order, earnings_list = await loop.run_in_executor(
+                    request = await loop.run_in_executor(
                         pool, earnings_driver_requests, phone, interval)
-                    await add_url_driver(session, url_driver_order, int(phone))
+                    if request.get('status') != 401:
+                        return request
                 else:
                     return 'Авторизации не выполнена! Попробуйте позже..'
 
-            if status == 200:
-                return status, earnings_list
-            else:
-                return 400, earnings_list
     except TimeoutError as e:
         logging.error(f'Возникла ошибка времени ожидания: {e}')
         return 'Возникла ошибка времени ожидания'

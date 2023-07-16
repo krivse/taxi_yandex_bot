@@ -126,7 +126,7 @@ async def update_account_password(session, password):
 async def get_account_password(session):
     """Получение пароля парка."""
     result = (await session.get(
-        AccountPark, 6))
+        AccountPark, 1)).password
 
     return result
 

@@ -85,7 +85,7 @@ async def payment_method(message: Message, session, state: FSMContext):
             await message.bot.send_message(
                 chat_id=admin,
                 text=f'Ошибка запроса при изменения лимита у {first_name} {middle_name}, ошибка: {response}.')
-    elif method == 'Смена в долг' and user is not None:
+    elif method == '🕰Смена в долг' and user is not None:
         # установка лимита для режима работы в долг.
         access, limit = await access_debt_mode(session, telegram_id)
         if access:
@@ -109,74 +109,74 @@ async def payment_method(message: Message, session, state: FSMContext):
 
 async def amount_order(message: Message, session, state: FSMContext):
     """Получение суммы заказа"""
-    user = await state.get_data()
-    first_name, middle_name, phone = user.get('first_name'), user.get('middle_name'), user.get('phone')
-
-    # telegra_id пользователя
     telegram_id = message.chat.id
-
-    # если пользователь нажал не на команду, а сразу на кнопку, то будет запрос к БД.
-    if user == {}:
-        user = await get_user(session, telegram_id)
-        if user is not None:
-            first_name, middle_name, taxi_id, phone = user
-        await state.update_data(phone=phone)
+    user = await get_user(session, telegram_id)
 
     # В этой функции с помощью аргумента amount определим сумму текущего заказа
-    msg_for_delete_current_order = await message.answer(text='🚖 Проверяю текущие заказы.. Подождите..')
-    await state.update_data(msg_for_delete_current_order=msg_for_delete_current_order.message_id)
-    await change_working_order_method(message, session, state, str(phone), way='amount', amount=True)
+    if user is not None:
+        msg_for_delete_current_order = await message.answer(text='🚖 Проверяю текущие заказы.. Подождите..')
+        await state.update_data(msg_for_delete_current_order=msg_for_delete_current_order.message_id)
+        await change_working_order_method(message, session, state, str(user[3]), way='amount', amount=True)
+    else:
+        await message.answer(f'У вас нет доступа!')
 
 
 async def complete_order(call: CallbackQuery, session, state: FSMContext):
     """Выбор способа оплаты с последующим завершением / отмена действия."""
-    # await message.delete()
-    phone = str((await state.get_data()).get('phone'))
+
+    # telegra_id пользователя
+    telegram_id = call.message.chat.id
+    user = await get_user(session, telegram_id)
 
     # выбор способа оплаты заказа
     if call.data == 'fix__confirm':
-        await change_working_order_method(call, session, state, phone, way='fixed', amount=False)
+        await change_working_order_method(call, session, state, str(user[3]), way='fixed', amount=False)
         await call.answer('☺️Заказ перешёл в статус "Завершённые"')
     elif call.data == 'taximeter__confirm':
-        await change_working_order_method(call, session, state, phone, way='taximeter', amount=False)
+        await change_working_order_method(call, session, state, str(user[3]), way='taximeter', amount=False)
         await call.answer('☺️Заказ перешёл в статус "Завершённые"')
     elif call.data == 'back__cancel':
         await call.answer(
             text='Отмена действия по завершению заказа',
         )
-        # await call.message.edit_reply_markup()
     msg_delete = (await state.get_data()).get('msg_order_delete')
     await call.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_delete)
+    await state.finish()
 
 
-async def cancel_order(message: Message):
+async def cancel_order(message: Message, session, state: FSMContext):
     """Отмена текущего заказа."""
-    await message.answer(
-        text='При отмене заказа с Вас будут списаны баллы Активности. Отменить заказ?',
-        reply_markup=cancel_order_keyboard
-    )
+    telegram_id = message.chat.id
+    user = await get_user(session, telegram_id)
+    if user is not None:
+        await message.answer(
+            text='При отмене заказа с Вас будут списаны баллы Активности. Отменить заказ?',
+            reply_markup=cancel_order_keyboard
+        )
+    else:
+        await message.answer(f'У вас нет доступа!')
 
 
 async def confirm_cancel_order(call: CallbackQuery, session, state: FSMContext):
     """Подтверждение отмены заказа."""
-    user = await state.get_data()
-    first_name, middle_name, phone = user.get('first_name'), user.get('middle_name'), user.get('phone')
-    # telegra_id пользователя
-    telegram_id = call.message.chat.id
-
     # если пользователь нажал не на команду, а сразу на кнопку, то будет запрос к БД.
-    if user == {}:
-        user = await get_user(session, telegram_id)
-        if user is not None:
-            first_name, middle_name, taxi_id, phone = user
-    if call.data == 'cancel_confirm':
-        # await call.message.answer('🏁Получаю текущие заказы. Ожидайте..')
-        await change_working_order_method(call, session, state, str(phone), way='cancel_confirm', amount=False)
+    telegram_id = call.message.chat.id
+    user = await get_user(session, telegram_id)
+
+    if call.data == 'cancel_confirm' and user is not None:
+        msg_for_delete_current_order = await call.message.answer(text='🚖 Проверяю текущие заказы.. Подождите..')
+        await state.update_data(msg_for_delete_current_order=msg_for_delete_current_order.message_id)
+        request = await change_working_order_method(
+            call, session, state, str(user[3]), way='cancel_confirm', amount=False)
         await call.message.delete()
-        await call.answer('😥Текущий заказ отменен!')
-    elif call.data == 'not_cancel':
+        if request.get('empty_order') is None:
+            await call.answer('😥Текущий заказ отменен!')
+    elif call.data == 'not_cancel' and user is not None:
         await call.message.delete()
         await call.answer(text='Текущий заказ не отменен!')
+    else:
+        await call.message.answer(f'У вас нет доступа!')
+    await state.finish()
 
 
 async def get_help(message: Message, session):
@@ -186,31 +186,33 @@ async def get_help(message: Message, session):
     await message.answer(text_help)
 
 
-async def get_unpaid_orders(message: Message, state: FSMContext):
+async def get_unpaid_orders(message: Message, session, state: FSMContext):
     """Генерация клавиатуры для выбора периода по неоплаченным заказам."""
-    msg_delete_unpaid = await message.answer(text='Выберите период для отображения неоплаченных заказов',
-                                             reply_markup=unpaid_orders_keyboard)
-    await state.update_data(msg_delete_unpaid=msg_delete_unpaid.message_id)
+    telegram_id = message.chat.id
+    user = await get_user(session, telegram_id)
+    if user is not None:
+        msg_delete_unpaid = await message.answer(text='Выберите период для отображения неоплаченных заказов',
+                                                 reply_markup=unpaid_orders_keyboard)
+        await state.update_data(msg_delete_unpaid=msg_delete_unpaid.message_id)
+    else:
+        await message.answer(f'У вас нет доступа!')
 
 
-async def select_period_unpaid_orders(call: CallbackQuery, session, state):
+async def select_period_unpaid_orders(call: CallbackQuery, session, state: FSMContext):
     """Выбор периода для получения информации о неоплаченных заказах."""
     admin = call.message.bot.get('config').tg_bot.admin_ids[0]
-    user = await state.get_data()
-    first_name, middle_name, phone = user.get('first_name'), user.get('middle_name'), user.get('phone')
-
     # telegra_id пользователя
     telegram_id = call.message.chat.id
+    user = await get_user(session, telegram_id)
 
-    # если пользователь нажал не на команду, а сразу на кнопку, то будет запрос к БД.
-    if phone is None:
-        user = await get_user(session, telegram_id)
-        if user is not None:
-            first_name, middle_name, taxi_id, phone = user
+    # отмена действий по функции заработка
+    msg_for_delete = (await state.get_data()).get('msg_delete_unpaid')
+    await call.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_for_delete)
 
     # сохраняем сегодняшнюю дату
     date_today = date.today()
-    response_unpaid = None
+    response = None
+    date_last_month = date_today.replace(month=(date_today.replace(day=1) - timedelta(days=1)).month)
     period = {
         'unpaid_today': f'за сегодня: {date_today.strftime("%d.%m.%Y г.")}',
         'unpaid_yesterday': f'за вчерашний день: {(date_today - timedelta(days=1)).strftime("%d.%m.%Y г.")}',
@@ -218,7 +220,7 @@ async def select_period_unpaid_orders(call: CallbackQuery, session, state):
             f'за неделю: с {(date_today - timedelta(weeks=1)).strftime("%d.%m.%Y г.")} '
             f'по {date_today.strftime("%d.%m.%Y г.")}',
         'unpaid_month':
-            f'за месяц: с {(date_today - timedelta(weeks=4)).strftime("%d.%m.%Y г.")} '
+            f'за месяц: с {date_last_month.strftime("%d.%m.%Y г.")} '
             f'по {date_today.strftime("%d.%m.%Y г.")}'
     }
     msg_del_unpaid = await call.message.answer(
@@ -235,7 +237,7 @@ async def select_period_unpaid_orders(call: CallbackQuery, session, state):
             'end_day': day, 'end_month': list_months.get(month),
         }
 
-        response_unpaid = await settings_for_select_period_unpaid_orders(call, session, phone, interval)
+        response = await settings_for_select_period_unpaid_orders(call, session, str(user[3]), interval)
 
     elif call.data == 'unpaid_yesterday':
         yesterday = str((date_today - timedelta(days=1)).day)
@@ -248,14 +250,14 @@ async def select_period_unpaid_orders(call: CallbackQuery, session, state):
             'end_day': yesterday, 'end_month': list_months.get(month),
         }
 
-        response_unpaid = await settings_for_select_period_unpaid_orders(call, session, phone, interval)
+        response = await settings_for_select_period_unpaid_orders(call, session, str(user[3]), interval)
 
     elif call.data == 'unpaid_week':
-        response_unpaid = await settings_for_select_period_unpaid_orders(call, session, phone, interval=None)
+        response = await settings_for_select_period_unpaid_orders(call, session, str(user[3]), interval=None)
 
     elif call.data == 'unpaid_month':
-        start_day = str((date_today - timedelta(weeks=4)).day)
-        start_month = (date_today - timedelta(weeks=4)).month
+        start_day = str(date_today.day)
+        start_month = date_today.replace(month=(date_today.replace(day=1) - timedelta(days=1)).month).month
         today = str(date_today.day)
         current_month = date_today.month
 
@@ -265,15 +267,16 @@ async def select_period_unpaid_orders(call: CallbackQuery, session, state):
             'start_day': start_day, 'start_month': list_months.get(start_month),
             'end_day': today, 'end_month': list_months.get(current_month),
         }
-        response_unpaid = await settings_for_select_period_unpaid_orders(call, session, phone, interval)
+        response = await settings_for_select_period_unpaid_orders(call, session, str(user[3]), interval)
 
-    if response_unpaid[0] == 200:
+    if response.get('status') == 200:
         await call.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_del_unpaid.message_id)
 
-        if not response_unpaid[1]:
+        unpaid_orders = response.get('unpaid_orders')
+        if not unpaid_orders:
             await call.message.answer(text=f'{period.get(call.data).capitalize()} неоплаченные заказы отсутствуют ✅')
         else:
-            for order in response_unpaid[1]:
+            for order in unpaid_orders:
                 await call.message.answer(text=f'❌ {period.get(call.data).capitalize()}\n'
                                                f'Номер заказа: {order[0]}\n'
                                                f'Дата начала: {order[1]}\n'
@@ -283,8 +286,23 @@ async def select_period_unpaid_orders(call: CallbackQuery, session, state):
         await call.message.answer('Ошибка запроса! Попробуйте позже..')
         await call.message.bot.send_message(
             chat_id=admin,
-            text=f'Ошибка запроса при получении неоплаченных заказов у {first_name} {middle_name},'
-                 f' описание: {response_unpaid}.')
+            text=f'Ошибка запроса при получении неоплаченных заказов у {str(user[0])} {str(user[1])},'
+                 f' описание: {response}.')
+
+    await state.finish()
+
+
+async def get_earnings(message: Message, session, state: FSMContext):
+    """Генерация клавиатуры для выбора периода по заработку."""
+    # telegra_id пользователя
+    telegram_id = message.chat.id
+    user = await get_user(session, telegram_id)
+    if user is not None:
+        msg_delete_earn = await message.answer(
+            text='Выберите период для отображения заработка', reply_markup=earnings_keyboard)
+        await state.update_data(msg_delete_earn=msg_delete_earn.message_id)
+    else:
+        await message.answer(f'У вас нет доступа!')
 
 
 async def cancel_unpaid_order(call: CallbackQuery, state: FSMContext):
@@ -294,39 +312,29 @@ async def cancel_unpaid_order(call: CallbackQuery, state: FSMContext):
     await state.finish()
 
 
-async def get_earnings(message: Message, state: FSMContext):
-    """Генерация клавиатуры для выбора периода по заработку."""
-    msg_delete_earn = await message.answer(
-        text='Выберите период для отображения заработка', reply_markup=earnings_keyboard)
-    await state.update_data(msg_delete_earn=msg_delete_earn.message_id)
-
-
 async def select_period_earnings(call: CallbackQuery, session, state: FSMContext):
     """Выбор периода для получения информации о заработке."""
     admin = call.message.bot.get('config').tg_bot.admin_ids[0]
-    user = await state.get_data()
-    first_name, middle_name, phone = user.get('first_name'), user.get('middle_name'), user.get('phone')
-    # telegra_id пользователя
     telegram_id = call.message.chat.id
+    user = await get_user(session, telegram_id)
 
-    # если пользователь нажал не на команду, а сразу на кнопку, то будет запрос к БД.
-    if phone is None:
-        user = await get_user(session, telegram_id)
+    # отмена действий по функции заработка
+    msg_for_delete = (await state.get_data()).get('msg_delete_earn')
+    await call.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_for_delete)
 
-        if user is not None:
-            first_name, middle_name, taxi_id, phone = user
     # сохраняем сегодняшнюю дату
     date_today = date.today()
-    response_earn = None
+    response = None
+    date_last_month = date_today.replace(month=(date_today.replace(day=1) - timedelta(days=1)).month)
     period = {
         'earnings_today': f'за сегодня: {date_today.strftime("%d.%m.%Y г.")}',
         'earnings_yesterday': f'за вчерашний день: {(date_today - timedelta(days=1)).strftime("%d.%m.%Y г.")}',
         'earnings_week':
             f'за неделю: с {(date_today - timedelta(weeks=1)).strftime("%d.%m.%Y г.")} '
-            f'по {date_today.strftime("%m.%d.%Y")}',
+            f'по {date_today.strftime("%d.%m.%Y г.")}',
         'earnings_month':
-            f'за месяц: с {(date_today - timedelta(weeks=4)).strftime("%d.%m.%Y г.")} '
-            f'по {date_today.strftime("%m.%d.%Y")}'
+            f'за месяц: с {date_last_month.strftime("%d.%m.%Y г.")} '
+            f'по {date_today.strftime("%d.%m.%Y г.")}'
     }
 
     msg_del_earn = await call.message.answer(
@@ -342,7 +350,7 @@ async def select_period_earnings(call: CallbackQuery, session, state: FSMContext
             'start_day': day, 'start_month': list_months.get(month),
             'end_day': day, 'end_month': list_months.get(month),
         }
-        response_earn = await settings_for_select_period_earnings_driver(call, session, phone, interval)
+        response = await settings_for_select_period_earnings_driver(call, session, str(user[3]), interval)
 
     elif call.data == 'earnings_yesterday':
         yesterday = str((date_today - timedelta(days=1)).day)
@@ -355,7 +363,7 @@ async def select_period_earnings(call: CallbackQuery, session, state: FSMContext
             'end_day': yesterday, 'end_month': list_months.get(month),
         }
 
-        response_earn = await settings_for_select_period_earnings_driver(call, session, phone, interval)
+        response = await settings_for_select_period_earnings_driver(call, session, str(user[3]), interval)
 
     elif call.data == 'earnings_week':
         start_day = str((date_today - timedelta(weeks=1)).day)
@@ -369,11 +377,11 @@ async def select_period_earnings(call: CallbackQuery, session, state: FSMContext
             'start_day': start_day, 'start_month': list_months.get(start_month),
             'end_day': today, 'end_month': list_months.get(current_month),
         }
-        response_earn = await settings_for_select_period_earnings_driver(call, session, phone, interval)
+        response = await settings_for_select_period_earnings_driver(call, session, str(user[3]), interval)
 
     elif call.data == 'earnings_month':
-        start_day = str((date_today - timedelta(weeks=4)).day)
-        start_month = (date_today - timedelta(weeks=4)).month
+        start_day = str(date_today.day)
+        start_month = date_today.replace(month=(date_today.replace(day=1) - timedelta(days=1)).month).month
         today = str(date_today.day)
         current_month = date_today.month
 
@@ -383,16 +391,17 @@ async def select_period_earnings(call: CallbackQuery, session, state: FSMContext
             'start_day': start_day, 'start_month': list_months.get(start_month),
             'end_day': today, 'end_month': list_months.get(current_month),
         }
-        response_earn = await settings_for_select_period_earnings_driver(call, session, phone, interval)
 
-    if response_earn[0] == 200:
+        response = await settings_for_select_period_earnings_driver(call, session, str(user[3]), interval)
+
+    if response.get('status') == 200:
         await call.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_del_earn.message_id)
 
-        string = response_earn[1]
+        string = response.get('earnings')
         if len(string) < 16:
             string.insert(12, '0,00')
 
-        await call.message.answer(text=f'📊 <b> Отчет {period.get(call.data).capitalize()}</b>\n\n'
+        await call.message.answer(text=f'📊 <b> Отчет {period.get(call.data)}</b>\n\n'
                                        f'Завершённые поездки: {string[0]}\n'
                                        f'Сумма с таксометра: {string[1]}\n'
                                        f'Пробег с пассажиром: {string[2]}\n\n'
@@ -413,8 +422,9 @@ async def select_period_earnings(call: CallbackQuery, session, state: FSMContext
         await call.message.answer('Ошибка запроса! Попробуйте позже..')
         await call.message.bot.send_message(
             chat_id=admin,
-            text=f'Ошибка запроса при получении неоплаченных заказов у {first_name} {middle_name},'
-                 f' описание: {response_earn}.')
+            text=f'Ошибка запроса при получении неоплаченных заказов у {user[0]} {user[1]},'
+                 f' описание: {response}.')
+    await state.finish()
 
 
 async def cancel_earnings(call: CallbackQuery, state: FSMContext):
@@ -426,15 +436,15 @@ async def cancel_earnings(call: CallbackQuery, state: FSMContext):
 
 def register_user(dp: Dispatcher):
     dp.register_message_handler(user_start, CommandStart(), state='*')
-    dp.register_message_handler(payment_method, text=['💳Безнал', '💵Нал / Безнал', 'Смена в долг'])
+    dp.register_message_handler(payment_method, text=['💳Безнал', '💵Нал / Безнал', '🕰Смена в долг'])
     dp.register_message_handler(amount_order, text='🏁Завершить тек. заказ')
     dp.register_callback_query_handler(complete_order, text=order_types)
     dp.register_message_handler(cancel_order, text='❌Отменить текущий заказ')
     dp.register_callback_query_handler(confirm_cancel_order, text=['cancel_confirm', 'not_cancel'])
     dp.register_message_handler(get_help, text='📝Справка')
     dp.register_message_handler(get_unpaid_orders, text='📈Неоплаченные заказы')
-    dp.register_callback_query_handler(cancel_unpaid_order, text='unpaid_cancel')
     dp.register_callback_query_handler(select_period_unpaid_orders, text=callback_unpaid)
+    dp.register_callback_query_handler(cancel_unpaid_order, text='unpaid_cancel')
     dp.register_message_handler(get_earnings, text='💰Заработок')
     dp.register_callback_query_handler(select_period_earnings, text=callback_earnings)
     dp.register_callback_query_handler(cancel_earnings, text='earnings_cancel')

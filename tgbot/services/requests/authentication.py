@@ -1,6 +1,5 @@
 import logging
 import os
-import time
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
@@ -10,6 +9,33 @@ from selenium.common.exceptions import TimeoutException
 import pickle
 
 from tgbot.services.requests.settings_driver import options_driver
+
+from aiogram.types import Message
+
+
+async def send_code_bot(obj, session):
+    # отправление сообщения админу для ввода кода
+    if isinstance(obj, Message):
+        admin = obj.bot.get('config').tg_bot.admin_ids[0]
+        await obj.bot.send_message(chat_id=admin, text='Ожидайте код для авторизация!')
+
+        # передача состояния администратору для ввода кода и записи в очередь !
+        await obj.bot.get('dp').storage.set_state(
+            chat=admin, user=admin, state='CodeConfirmState:code')
+        queue = obj.bot.get('queue')
+    else:
+        admin = obj.message.bot.get('config').tg_bot.admin_ids[0]
+        await obj.message.bot.send_message(chat_id=admin, text='Ожидайте код для авторизация!')
+
+        # передача состояния администратору для ввода кода и записи в очередь !
+        await obj.message.bot.get('dp').storage.set_state(
+            chat=admin, user=admin, state='CodeConfirmState:code')
+        queue = obj.bot.get('queue')
+    # запрос на получение пароля из бд
+    from tgbot.models.query import get_account_password
+    password = await get_account_password(session)
+
+    return password, queue
 
 
 def authentication_requests(queue, pass_park):
@@ -22,7 +48,7 @@ def authentication_requests(queue, pass_park):
     try:
         browser.get(current_park)
         # Дожидаемся загрузки страницы и нажимает на кнопку смены логина
-        change_username = wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'Button2-Content')))
+        change_username = wait.until(EC.visibility_of_element_located((By.CLASS_NAME, 'Button2-Content')))
         change_username.click()
 
         # перевод курсора на ввод почты
@@ -30,15 +56,14 @@ def authentication_requests(queue, pass_park):
         choose_email.click()
 
         # ввод юзернейма
-        input_username = wait.until(EC.presence_of_element_located((By.ID, 'passp-field-login')))
+        input_username = wait.until(EC.visibility_of_element_located((By.ID, 'passp-field-login')))
         input_username.clear()
         input_username.send_keys('telbot1')
         # клик на кнопку подверждения логина
-        enter_login = wait.until(EC.presence_of_element_located((By.ID, 'passp:sign-in')))
+        enter_login = wait.until(EC.visibility_of_element_located((By.ID, 'passp:sign-in')))
         enter_login.click()
-        time.sleep(3)
         # ввод пароля
-        password = wait.until(EC.presence_of_element_located((By.ID, 'passp-field-passwd')))
+        password = wait.until(EC.visibility_of_element_located((By.ID, 'passp-field-passwd')))
         password.clear()
         password.send_keys(pass_park)
         # клик на кнопку подверждения пароля
@@ -46,7 +71,6 @@ def authentication_requests(queue, pass_park):
         enter_password.click()
 
         # кнопка потвердить вход по номеру
-        time.sleep(2)
         confirm = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, 'Button2_type_submit')))
         confirm.click()
 
@@ -69,6 +93,7 @@ def authentication_requests(queue, pass_park):
 
         # сохранение куки после авторизации для дальнейших запросов
         pickle.dump(browser.get_cookies(), open(f'{os.path.dirname(os.path.abspath(__file__))}/cookies', 'wb'))
+
         return True
     except TimeoutException:
         logging.error('TimeoutException. Время ожидания поиска элемента истекло!')

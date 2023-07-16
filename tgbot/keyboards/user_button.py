@@ -41,6 +41,11 @@ async def choose_menu_for_user(session, telegram_id):
                 [
                     KeyboardButton(text='🏁Завершить тек. заказ'),
                     KeyboardButton(text='❌Отменить текущий заказ')
+                ],
+                [
+                    KeyboardButton(text='📈Неоплаченные заказы'),
+                    KeyboardButton(text='💰Заработок'),
+                    KeyboardButton(text='📝Справка')
                 ]
             ],
             resize_keyboard=True

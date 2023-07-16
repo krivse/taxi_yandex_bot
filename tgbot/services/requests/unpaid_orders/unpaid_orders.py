@@ -1,6 +1,5 @@
 import logging
 import os
-import time
 
 from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException
 from selenium.webdriver.common.by import By
@@ -10,9 +9,11 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 
+from tgbot.services.requests.general_requests import general_calendars
 from tgbot.services.requests.settings_driver import add_cookies, options_driver
 
 from dotenv import load_dotenv
+
 
 load_dotenv()
 
@@ -26,149 +27,120 @@ def unpaid_orders_requests(phone, interval, url=None):
     else:
         current_park = f'https://fleet.yandex.ru/drivers/{url}/orders?park_id={os.getenv("X_Park_ID")}'
 
+    status_requests = {}
+
     try:
         browser.get(current_park)
-        status = add_cookies(browser)
+        status = add_cookies(browser, wait)
 
         if not status:
-            return False
+            status_requests['status'] = 401
+            return status_requests
 
-        parse_id_driver_url = None
         if url is None:
             # поиск водителя
-            search_driver = wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'Textinput-Control')))
+            search_driver = wait.until(EC.visibility_of_element_located((By.CLASS_NAME, 'Textinput-Control')))
             search_driver.send_keys(phone)
-            browser.implicitly_wait(0.5)
-            time.sleep(1)
             choice_driver = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, 'PNVeph')))
             choice_driver.click()
-            time.sleep(1)
+
             # поиск вкладки "Заказы" и сохранение id водителя
-            for_save_driver_url = wait.until(EC.presence_of_element_located((
+            for_save_driver_url = wait.until(EC.visibility_of_element_located((
                 By.XPATH, "//a[starts-with(@href, '/drivers/')]"))).get_attribute('href')
-            parse_id_driver_url = for_save_driver_url.split('/')[4]
+            status_requests['url_driver'] = for_save_driver_url.split('/')[4]
+
             # поиск и переход на вкладку "Заказы"
             tab_order = wait.until(EC.element_to_be_clickable((By.LINK_TEXT, 'Заказы')))
             tab_order.click()
 
         if interval is not None:
-            popup_calendar = wait.until(EC.element_to_be_clickable((
-                By.XPATH, "//span[contains(@class, 'DateRangeInput_alignStart')]")))
-            popup_calendar.click()
-            time.sleep(1)
-        # find_month = browser.find_elements(By.XPATH, f"//span[starts-with(text(), {interval.get('start_month')})]")
-        # find_day = find_month.find_element(By.XPATH, f"//span[starts-with(text(), {interval.get('start_day')})]")
-        # find_day = browser.find_elements(By.CLASS_NAME, 'Day')
-            calendars = browser.find_elements(By.CLASS_NAME, 'Calendar')
-            for calendar in range(len(calendars)):
-                find_month = calendars[calendar].find_element(By.TAG_NAME, 'span').text
-                if find_month.startswith(interval.get('start_month')):
-                    find_day = calendars[calendar].find_elements(By.TAG_NAME, 'span')
-                    for day in find_day:
-                        if day.text == interval.get('start_day'):
-                            day.click()
-                if find_month.startswith(interval.get('end_month')):
-                    find_day = calendars[calendar].find_elements(By.TAG_NAME, 'span')
-                    for day in find_day:
-                        if day.text == interval.get('end_day'):
-                            day.click()
-            confirm_date = browser.find_element(By.CLASS_NAME, 'Modal-Content'
-                                                ).find_element(By.CLASS_NAME, 'Button2-Content')
-            confirm_date.click()
-        time.sleep(2)
+            # открыть календарь для установки периода
+            general_calendars(wait, interval)
+
+        # устанавливаем фильмы для поиска нужных заказов
         actions = ActionChains(browser)
-        filters = wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, 'Select__control')))
+        filters = wait.until(EC.visibility_of_all_elements_located((By.CLASS_NAME, 'Select__control')))
         for i in filters:
-
             if i.text == 'Статус':
-                time.sleep(1)
                 i.click()
-                actions.send_keys(Keys.ENTER).perform()
-                time.sleep(0.2)
-                actions.send_keys(Keys.ENTER).perform()
-                time.sleep(0.11)
-                actions.send_keys(Keys.ENTER).perform()
-                time.sleep(0.1)
-                actions.send_keys(Keys.ENTER).perform()
-                time.sleep(0.1)
-                actions.send_keys(Keys.ENTER).perform()
-                time.sleep(0.05)
-                actions.send_keys(Keys.ENTER).perform()
-                time.sleep(0.07)
-                actions.send_keys(Keys.ENTER).perform()
-                time.sleep(0.1)
-                actions.send_keys(Keys.ENTER).perform()
-                st = i.find_element(By.CLASS_NAME, 'Select__multi-value')
-                time.sleep(1)
-                st.click()
-                statuses = browser.find_elements(By.CLASS_NAME, 'Select__multi-value__remove')
-                for complete in statuses:
-                    if complete.get_dom_attribute('aria-label').strip('Remove ') != 'Выполнен':
-                        time.sleep(0.1)
-                        complete.click()
-                time.sleep(1)
-
+                # выбор всех фильтров
+                actions.send_keys([Keys.ENTER] * 8).perform()
+                # закрытие окна выбора фильтров
+                select_status = WebDriverWait(i, 30).until(
+                    EC.visibility_of_element_located((By.CLASS_NAME, 'Select__multi-value')))
+                select_status.click()
+                # удаление ненужных фильтров
+                remove_filters_status = wait.until(
+                    EC.visibility_of_all_elements_located((By.CLASS_NAME, 'Select__multi-value__remove')))
+                for rem_filter in remove_filters_status:
+                    if rem_filter.get_dom_attribute('aria-label').strip('Remove ') != 'Выполнен':
+                        rem_filter.click()
             elif i.text == 'Тип оплаты':
                 i.click()
-                time.sleep(0.1)
-                actions.send_keys([Keys.ENTER]).perform()
-                time.sleep(0.12)
-                actions.send_keys([Keys.ENTER]).perform()
-                time.sleep(0.1)
-                actions.send_keys([Keys.ENTER]).perform()
-                time.sleep(0.1)
-                actions.send_keys([Keys.ENTER]).perform()
-                time.sleep(0.12)
-                actions.send_keys([Keys.ENTER]).perform()
-                time.sleep(0.2)
-                actions.send_keys([Keys.ENTER]).perform()
-                time.sleep(0.1)
-                actions.send_keys([Keys.ENTER]).perform()
-                st = i.find_element(By.CLASS_NAME, 'Select__multi-value')
-                st.click()
-                statuses = browser.find_elements(By.CLASS_NAME, 'Select__multi-value__remove')
-                for complete in statuses:
-                    cashless = complete.get_dom_attribute('aria-label').strip('Remove ')
+                # выбор всех фильтров
+                actions.send_keys([Keys.ENTER] * 7).perform()
+                # удаление ненужных фильтров
+                remove_filters_payment = wait.until(
+                    EC.visibility_of_all_elements_located((By.CLASS_NAME, 'Select__multi-value__remove')))
+                for rem_filter in remove_filters_payment:
+                    cashless = rem_filter.get_dom_attribute('aria-label').strip('Remove ')
                     if cashless not in ['Безналичные', 'Корп. счёт', 'Карта', 'Выполнен']:
-                        time.sleep(0.1)
-                        complete.click()
+                        rem_filter.click()
+                # закрытие окна выбора фильтров
+                select_status = WebDriverWait(i, 30).until(
+                    EC.visibility_of_element_located((By.CLASS_NAME, 'Select__multi-value')))
+                select_status.click()
 
+        # обработка пустого экрана заказов
+        try:
+            empty_order_sheet = WebDriverWait(browser, 5).until(
+                EC.visibility_of_element_located((By.XPATH, "//h2[contains(text(), 'Пока ничего нет')]")))
+            if empty_order_sheet.text == 'Пока ничего нет':
+                status_requests['status'] = 200
+                status_requests['unpaid_orders'] = []
+                return status_requests
+        except TimeoutException:
+            pass
+
+        # поиск неоплаченных заказов
         while True:
             try:
-                browser.implicitly_wait(5)
-                # time.sleep(2)
-                exists_el = WebDriverWait(browser, 3).until(EC.visibility_of_element_located(
-                    (By.XPATH, "//span[contains(text(), 'Загрузить ещё')]"))
-                )
-                # exists_el = browser.find_element(By.XPATH, "//span[contains(text(), 'Загрузить ещё')]")
-                if exists_el.text == 'Загрузить ещё':
-                    download_more = browser.find_elements(By.CLASS_NAME, 'Button2-Content')
-                    for i in download_more:
-                        if i.text == 'Загрузить ещё':
-                            i.click()
-                            continue
+                # на каждой итерации проверяется элемент на странице
+                exists_el = WebDriverWait(browser, 7).until(
+                    EC.presence_of_element_located((By.XPATH, "//span[contains(text(), 'Загрузить ещё')]")))
+                if exists_el.is_enabled() is True:
+                    # перебираются все кнопки для поиска 'Загрузить ещё'
+                    download_more = wait.until(
+                        EC.presence_of_all_elements_located((By.CLASS_NAME, 'Button2-Content')))
+                    for i in range(len(download_more)):
+                        if download_more[i].text == 'Загрузить ещё':
+                            # time.sleep(0.1)
+                            download_more[i].click()
             except StaleElementReferenceException:
+                # обработка исключения и переход на новую итерацию
+                continue
+            except TimeoutException:
+                # обработка исключения при отсутствии элемента на странице выше лимита из функции WebDriverWait
                 break
-            except NoSuchElementException as e:
-                logging.error(f'NoSuchElementException. Время ожидания истекло и возникла ошибка времени ожидания: {e}')
-            except TimeoutException as e:
-                logging.error(f'TimeoutError. Время ожидания истекло и возникла ошибка времени ожидания: {e}')
-        tbody = browser.find_element(By.TAG_NAME, 'tbody')
-        time.sleep(1)
-        orders = tbody.find_elements(By.XPATH, "//tr[starts-with(@class, 'NativeTable_tr__')]")[:1]
-        unpaid_o = []
+
+        # сбор данных по неоплаченным заказам
+        tbody = wait.until(EC.visibility_of_element_located((By.TAG_NAME, 'tbody')))
+        orders = WebDriverWait(tbody, 30).until(
+            EC.visibility_of_all_elements_located(
+                (By.XPATH, "//tr[starts-with(@class, 'NativeTable_tr__')]")))
+        unpaid_orders = []
         for tr in orders:
-            time.sleep(1)
-            td = tr.find_elements(By.TAG_NAME, 'td')
-
+            td = WebDriverWait(tr, 30).until(EC.visibility_of_all_elements_located((By.TAG_NAME, 'td')))
             if td[11].text == '0,00' and td[12].text == '0,00':
-                unpaid_o.append([td[1].text, td[3].text, td[4].text, td[6].text])
+                unpaid_orders.append([td[1].text, td[3].text, td[4].text, td[6].text])
 
-        return 200, parse_id_driver_url, unpaid_o
+        status_requests['status'] = 200
+        status_requests['unpaid_orders'] = unpaid_orders
+
+        return status_requests
 
     except TimeoutException:
         logging.error('TimeoutException. Время ожидания поиска элемента истекло!')
-        return False
     except TimeoutError as ex:
         logging.error(f'TimeoutError. Время ожидания истекло и возникла ошибка времени ожидания: {ex}')
     except Exception as ex:
