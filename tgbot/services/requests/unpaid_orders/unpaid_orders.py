@@ -44,11 +44,6 @@ def unpaid_orders_requests(phone, interval, url=None):
             choice_driver = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, 'PNVeph')))
             choice_driver.click()
 
-            # поиск вкладки "Заказы" и сохранение id водителя
-            for_save_driver_url = wait.until(EC.visibility_of_element_located((
-                By.XPATH, "//a[starts-with(@href, '/drivers/')]"))).get_attribute('href')
-            status_requests['url_driver'] = for_save_driver_url.split('/')[4]
-
             # поиск и переход на вкладку "Заказы"
             tab_order = wait.until(EC.element_to_be_clickable((By.LINK_TEXT, 'Заказы')))
             tab_order.click()
@@ -79,6 +74,10 @@ def unpaid_orders_requests(phone, interval, url=None):
                 i.click()
                 # выбор всех фильтров
                 actions.send_keys([Keys.ENTER] * 7).perform()
+                # закрытие окна выбора фильтров
+                select_status = WebDriverWait(i, 30).until(
+                    EC.visibility_of_element_located((By.CLASS_NAME, 'Select__multi-value')))
+                select_status.click()
                 # удаление ненужных фильтров
                 remove_filters_payment = wait.until(
                     EC.visibility_of_all_elements_located((By.CLASS_NAME, 'Select__multi-value__remove')))
@@ -86,10 +85,6 @@ def unpaid_orders_requests(phone, interval, url=None):
                     cashless = rem_filter.get_dom_attribute('aria-label').strip('Remove ')
                     if cashless not in ['Безналичные', 'Корп. счёт', 'Карта', 'Выполнен']:
                         rem_filter.click()
-                # закрытие окна выбора фильтров
-                select_status = WebDriverWait(i, 30).until(
-                    EC.visibility_of_element_located((By.CLASS_NAME, 'Select__multi-value')))
-                select_status.click()
 
         # обработка пустого экрана заказов
         try:

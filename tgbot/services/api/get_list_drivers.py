@@ -1,5 +1,3 @@
-import asyncio
-import os
 import logging
 from dotenv import load_dotenv
 
@@ -15,12 +13,12 @@ load_dotenv()
 async def get_driver_profile(phone, header):
     async with aiohttp.ClientSession() as connect:
         url = 'https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list'
-        # query = {"query": {"park": {"id": header.X_Park_ID}}}  # os.getenv('X_Park_ID')
-        # headers = {'X-Client-ID': header.X_Client_ID,  # os.getenv('X_Client_ID'),
-        #            'X-API-Key':  header.X_API_Key}  # os.getenv('X_API_Key')
-        query = {"query": {"park": {"id": os.getenv('X_Park_ID')}}}
-        headers = {'X-Client-ID': os.getenv('X_Client_ID'),
-                   'X-API-Key': os.getenv('X_API_Key')}
+        query = {"query": {"park": {"id": header.X_Park_ID}}}
+        headers = {'X-Client-ID': header.X_Client_ID,
+                   'X-API-Key':  header.X_API_Key}
+        # query = {"query": {"park": {"id": os.getenv('X_Park_ID')}}}
+        # headers = {'X-Client-ID': os.getenv('X_Client_ID'),
+        #            'X-API-Key': os.getenv('X_API_Key')}
         try:
             # форматирование телефона.
             user_phone = phone_formatting(phone)
@@ -50,5 +48,3 @@ async def get_driver_profile(phone, header):
             logging.error(f'Возникла сетевая ошибка: {e}')
         except Exception as e:
             logging.error(f'Ошибка {e}')
-
-# asyncio.run(get_driver_profile('79517784838', None))

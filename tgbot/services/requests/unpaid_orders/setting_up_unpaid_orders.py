@@ -14,7 +14,7 @@ from tgbot.services.requests.unpaid_orders.unpaid_orders import unpaid_orders_re
 # load_dotenv()
 
 
-async def settings_for_select_period_unpaid_orders(obj, session, phone, interval):
+async def settings_for_select_period_unpaid_orders(obj, session, phone, taxi_id, interval):
     """
     Работа запросов по выдаче информации о неоплаченных заказах.
     Обработка запросов в отдельном потоке.
@@ -23,25 +23,10 @@ async def settings_for_select_period_unpaid_orders(obj, session, phone, interval
         loop = asyncio.get_running_loop()
         with ThreadPoolExecutor() as pool:
             # вход на страницу водителя по его id
-            from tgbot.models.query import get_url_driver_limit
-            format_phone = phone_formatting(str(phone))
-            url_driver_order = await get_url_driver_limit(session, format_phone)
-
-            # если id нет, то выполняется вход с дальнейшей записью id водителя в бд,
-            # ссылка на заказ для дальнейшего завершения
-            if url_driver_order is None:
-                request = await loop.run_in_executor(
-                    pool, unpaid_orders_requests, phone, interval
-                )
-                if request.get('status') != 401:
-                    await add_url_driver(session, request.get('url_driver'), int(phone))
-                    return request
-
-            elif url_driver_order is not None:
-                request = await loop.run_in_executor(
-                    pool, unpaid_orders_requests, phone, interval, url_driver_order[0])
-                if request.get('status') != 401:
-                    return request
+            request = await loop.run_in_executor(
+                    pool, unpaid_orders_requests, phone, interval, taxi_id)
+            if request.get('status') != 401:
+                return request
 
             if request.get('status') == 401:
                 # получение кода для авторизации

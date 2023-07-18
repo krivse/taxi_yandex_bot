@@ -41,11 +41,6 @@ def working_order_requests(phone, way, amount, url=None):
             choice_driver = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, 'PNVeph')))
             choice_driver.click()
 
-            # сохранить ссылку на страницу водителя
-            for_save_driver_url = wait.until(EC.visibility_of_element_located((
-                By.XPATH, "//a[starts-with(@href, '/drivers/')]"))).get_attribute('href')
-            status_requests['url_driver'] = for_save_driver_url.split('/')[4]
-
             # поиск и переход на вкладку "Заказы"
             tab_order = wait.until(EC.element_to_be_clickable((
                 By.XPATH, "//span[contains(text(), 'Заказы')]")))

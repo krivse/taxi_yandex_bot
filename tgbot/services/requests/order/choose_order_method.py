@@ -14,7 +14,7 @@ from tgbot.services.requests.order.work_with_order import working_order_requests
 from aiogram.types import Message
 
 
-async def change_working_order_method(obj, session, state, phone, way, amount):
+async def change_working_order_method(obj, session, state, phone, taxi_id, way, amount):
     """
     Работа запросов по завершению заказов у водителей.
     Обработка запросов в отдельном потоке.
@@ -23,38 +23,16 @@ async def change_working_order_method(obj, session, state, phone, way, amount):
         loop = asyncio.get_running_loop()
         with ThreadPoolExecutor() as pool:
             # вход на страницу водителя по его id
-            from tgbot.models.query import get_url_driver_limit
-            format_phone = phone_formatting(phone)
-            url_driver = await get_url_driver_limit(session, format_phone)
-            # если id нет, то выполняется вход с дальнейшей записью id водителя в бд,
-            # ссылка на заказ для дальнейшего завершения
-            if url_driver is None:
-                request = await loop.run_in_executor(
-                        pool, working_order_requests, phone, way, amount)
+            request = await loop.run_in_executor(
+                    pool, working_order_requests, phone, way, amount, taxi_id)
 
-                if request.get('status') != 401:
-                    await add_url_driver(session, request.get('url_driver'), int(phone))
-                    await complete_or_empty_order(obj, way, state, request)
-                    return request
-                else:
-                    logging.error(
-                        'Возникла ошибка связанная скорее всего с отсутствием элемента на странице',
-                        request.get('status')
-                    )
-
-            # если id водителя есть, то сразу получаем доступ к странице водителя
-            elif url_driver is not None:
-                request = await loop.run_in_executor(
-                        pool, working_order_requests, phone, way, amount, url_driver[0])
-
-                if request.get('status') != 401:
-                    await complete_or_empty_order(obj, way, state, request)
-                    return request
-                else:
-                    logging.error(
-                        'Возникла ошибка связанная скорее всего с отсутствием элемента на странице',
-                        request.get('status')
-                    )
+            if request.get('status') != 401:
+                await complete_or_empty_order(obj, way, state, request)
+                return request
+            else:
+                logging.error(
+                    'Возникла ошибка связанная скорее всего с отсутствием элемента на странице', request.get('status')
+                )
 
             if request.get('status') == 401:
                 # получение кода для авторизации

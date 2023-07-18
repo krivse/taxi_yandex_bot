@@ -45,10 +45,6 @@ def change_limit_requests(phone, limit, url=None):
             search_driver.send_keys(phone)
             choice_driver = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, 'PNVeph')))
             choice_driver.click()
-            # сохранить ссылку на страницу водителя
-            for_save_driver_url = wait.until(EC.visibility_of_element_located((
-                By.XPATH, "//a[starts-with(@href, '/drivers/')]"))).get_attribute('href')
-            status_requests['url_driver'] = for_save_driver_url.split('/')[4]
 
         # поиск поля для изменения лимита
         change_limit = wait.until(EC.element_to_be_clickable((By.NAME, 'accounts.balance_limit')))

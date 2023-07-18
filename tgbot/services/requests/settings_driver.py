@@ -39,7 +39,7 @@ def options_driver():
     chrome_options = ChromiumOptions()
     # передача необходимых опций в бразуер
     # открытие браузера в фоновом режиме эквивалентно chrome_options.headless = True
-    # chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--headless")
     # отключение автоматизированного управления браузером
     chrome_options.add_experimental_option("excludeSwitches", ['enable-automation'])
     # игнорирование незащищенного соединения

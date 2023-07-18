@@ -56,6 +56,7 @@ async def add_url_driver(session, driver_url, phone):
             ).where(
                 User.phone == phone)
         ))).fetchall()
+    print(user)
 
     # если записи нет в driver_settings, то она создается
     if len(user) == 1:

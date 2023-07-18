@@ -50,24 +50,21 @@ async def payment_method(message: Message, session, state: FSMContext):
     admin = message.bot.get('config').tg_bot.admin_ids[0]
     # название кнопки
     method = message.text
-    # реакция на команду /start иx получение состояиния юзера
-    user = await state.get_data()
-    first_name, middle_name, phone = user.get('first_name'), user.get('middle_name'), user.get('phone')
-    # telegra_id пользователя
-    telegram_id = message.from_user.id
 
-    # если пользователь нажал не на команду, а сразу на кнопку, то будет запрос к БД.
-    if user == {}:
-        user = await get_user(session, telegram_id)
-        if user is not None:
-            first_name, middle_name, taxi_id, phone = user
+    # получаем пользователя из бд.
+    first_name, middle_name, taxi_id, phone = None, None, None, None
+    telegram_id = message.chat.id
+    user = await get_user(session, telegram_id)
+    if user is not None:
+        first_name, middle_name, taxi_id, phone = user
+
     if method == '💳Безнал' and user is not None:
         # установка лимита для оплаты по безналу.
-        response = await change_of_payment_method(message, session, '15000', str(phone))
+        response = await change_of_payment_method(message, session, '15000', str(phone), taxi_id)
         if response == 200:
             await message.answer(f'{first_name} {middle_name}, '
                                  'Вам установлен лимит 15000 руб. '
-                                 'Пока Ваш баланс ниже этой суммы, вам будут поступаь только БЕЗНАЛИЧНЫЕ заказы.')
+                                 'Пока Ваш баланс ниже этой суммы, вам будут поступать только БЕЗНАЛИЧНЫЕ заказы.')
         else:
             await message.answer('Ошибка запроса! Попробуйте позже..')
             await message.bot.send_message(
@@ -75,7 +72,7 @@ async def payment_method(message: Message, session, state: FSMContext):
                 text=f'Ошибка запроса при изменения лимита у {first_name} {middle_name}, ошибка: {response}')
     elif method == '💵Нал / Безнал' and user is not None:
         # установка лимита для оплаты по нал / безннал.
-        response = await change_of_payment_method(message, session, '50', str(phone))
+        response = await change_of_payment_method(message, session, '50', str(phone), taxi_id)
         if response == 200:
             await message.answer(f'{first_name} {middle_name}, '
                                  'Вам установлен лимит 50 руб. '
@@ -89,7 +86,7 @@ async def payment_method(message: Message, session, state: FSMContext):
         # установка лимита для режима работы в долг.
         access, limit = await access_debt_mode(session, telegram_id)
         if access:
-            response = await change_of_payment_method(message, session, str(limit), str(phone))
+            response = await change_of_payment_method(message, session, str(limit), str(phone), taxi_id)
             if response == 200:
                 await message.answer(f'{first_name} {middle_name}, '
                                      f'Вам установлен лимит {limit}, '
@@ -109,16 +106,19 @@ async def payment_method(message: Message, session, state: FSMContext):
 
 async def amount_order(message: Message, session, state: FSMContext):
     """Получение суммы заказа"""
-    telegram_id = message.chat.id
-    user = await get_user(session, telegram_id)
-
-    # В этой функции с помощью аргумента amount определим сумму текущего заказа
-    if user is not None:
-        msg_for_delete_current_order = await message.answer(text='🚖 Проверяю текущие заказы.. Подождите..')
-        await state.update_data(msg_for_delete_current_order=msg_for_delete_current_order.message_id)
-        await change_working_order_method(message, session, state, str(user[3]), way='amount', amount=True)
+    if message.text != '🏁Завершить тек. заказ':
+        await message.answer('Функция временно отключена!')
     else:
-        await message.answer(f'У вас нет доступа!')
+        telegram_id = message.chat.id
+        user = await get_user(session, telegram_id)
+
+        # В этой функции с помощью аргумента amount определим сумму текущего заказа
+        if user is not None:
+            msg_for_delete_current_order = await message.answer(text='🚖 Проверяю текущие заказы.. Подождите..')
+            await state.update_data(msg_for_delete_current_order=msg_for_delete_current_order.message_id)
+            await change_working_order_method(message, session, state, str(user[3]), user[2], way='amount', amount=True)
+        else:
+            await message.answer('У вас нет доступа!')
 
 
 async def complete_order(call: CallbackQuery, session, state: FSMContext):
@@ -130,10 +130,10 @@ async def complete_order(call: CallbackQuery, session, state: FSMContext):
 
     # выбор способа оплаты заказа
     if call.data == 'fix__confirm':
-        await change_working_order_method(call, session, state, str(user[3]), way='fixed', amount=False)
+        await change_working_order_method(call, session, state, str(user[3]), user[2], way='fixed', amount=False)
         await call.answer('☺️Заказ перешёл в статус "Завершённые"')
     elif call.data == 'taximeter__confirm':
-        await change_working_order_method(call, session, state, str(user[3]), way='taximeter', amount=False)
+        await change_working_order_method(call, session, state, str(user[3]), user[2], way='taximeter', amount=False)
         await call.answer('☺️Заказ перешёл в статус "Завершённые"')
     elif call.data == 'back__cancel':
         await call.answer(
@@ -167,7 +167,7 @@ async def confirm_cancel_order(call: CallbackQuery, session, state: FSMContext):
         msg_for_delete_current_order = await call.message.answer(text='🚖 Проверяю текущие заказы.. Подождите..')
         await state.update_data(msg_for_delete_current_order=msg_for_delete_current_order.message_id)
         request = await change_working_order_method(
-            call, session, state, str(user[3]), way='cancel_confirm', amount=False)
+            call, session, state, str(user[3]), user[2], way='cancel_confirm', amount=False)
         await call.message.delete()
         if request.get('empty_order') is None:
             await call.answer('😥Текущий заказ отменен!')
@@ -237,7 +237,7 @@ async def select_period_unpaid_orders(call: CallbackQuery, session, state: FSMCo
             'end_day': day, 'end_month': list_months.get(month),
         }
 
-        response = await settings_for_select_period_unpaid_orders(call, session, str(user[3]), interval)
+        response = await settings_for_select_period_unpaid_orders(call, session, str(user[3]), user[2], interval)
 
     elif call.data == 'unpaid_yesterday':
         yesterday = str((date_today - timedelta(days=1)).day)
@@ -250,10 +250,10 @@ async def select_period_unpaid_orders(call: CallbackQuery, session, state: FSMCo
             'end_day': yesterday, 'end_month': list_months.get(month),
         }
 
-        response = await settings_for_select_period_unpaid_orders(call, session, str(user[3]), interval)
+        response = await settings_for_select_period_unpaid_orders(call, session, str(user[3]), user[2], interval)
 
     elif call.data == 'unpaid_week':
-        response = await settings_for_select_period_unpaid_orders(call, session, str(user[3]), interval=None)
+        response = await settings_for_select_period_unpaid_orders(call, session, str(user[3]), user[2], interval=None)
 
     elif call.data == 'unpaid_month':
         start_day = str(date_today.day)
@@ -267,7 +267,7 @@ async def select_period_unpaid_orders(call: CallbackQuery, session, state: FSMCo
             'start_day': start_day, 'start_month': list_months.get(start_month),
             'end_day': today, 'end_month': list_months.get(current_month),
         }
-        response = await settings_for_select_period_unpaid_orders(call, session, str(user[3]), interval)
+        response = await settings_for_select_period_unpaid_orders(call, session, str(user[3]), user[2], interval)
 
     if response.get('status') == 200:
         await call.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_del_unpaid.message_id)
@@ -350,7 +350,7 @@ async def select_period_earnings(call: CallbackQuery, session, state: FSMContext
             'start_day': day, 'start_month': list_months.get(month),
             'end_day': day, 'end_month': list_months.get(month),
         }
-        response = await settings_for_select_period_earnings_driver(call, session, str(user[3]), interval)
+        response = await settings_for_select_period_earnings_driver(call, session, str(user[3]), user[2], interval)
 
     elif call.data == 'earnings_yesterday':
         yesterday = str((date_today - timedelta(days=1)).day)
@@ -363,7 +363,7 @@ async def select_period_earnings(call: CallbackQuery, session, state: FSMContext
             'end_day': yesterday, 'end_month': list_months.get(month),
         }
 
-        response = await settings_for_select_period_earnings_driver(call, session, str(user[3]), interval)
+        response = await settings_for_select_period_earnings_driver(call, session, str(user[3]), user[2], interval)
 
     elif call.data == 'earnings_week':
         start_day = str((date_today - timedelta(weeks=1)).day)
@@ -377,7 +377,7 @@ async def select_period_earnings(call: CallbackQuery, session, state: FSMContext
             'start_day': start_day, 'start_month': list_months.get(start_month),
             'end_day': today, 'end_month': list_months.get(current_month),
         }
-        response = await settings_for_select_period_earnings_driver(call, session, str(user[3]), interval)
+        response = await settings_for_select_period_earnings_driver(call, session, str(user[3]), user[2], interval)
 
     elif call.data == 'earnings_month':
         start_day = str(date_today.day)
@@ -392,7 +392,7 @@ async def select_period_earnings(call: CallbackQuery, session, state: FSMContext
             'end_day': today, 'end_month': list_months.get(current_month),
         }
 
-        response = await settings_for_select_period_earnings_driver(call, session, str(user[3]), interval)
+        response = await settings_for_select_period_earnings_driver(call, session, str(user[3]), user[2], interval)
 
     if response.get('status') == 200:
         await call.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_del_earn.message_id)
