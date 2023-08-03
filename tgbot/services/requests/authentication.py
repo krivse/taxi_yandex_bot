@@ -13,6 +13,8 @@ from tgbot.services.requests.settings_driver import options_driver
 from aiogram.types import Message
 
 
+
+
 async def send_code_bot(obj, session):
     # отправление сообщения админу для ввода кода
     if isinstance(obj, Message):
@@ -45,6 +47,8 @@ def authentication_requests(queue, pass_park):
 
     # Указываем URL-адрес для входа в систему
     current_park = 'https://fleet.yandex.ru/'
+    status_requests = {}
+
     try:
         browser.get(current_park)
         # Дожидаемся загрузки страницы и нажимает на кнопку смены логина
@@ -93,16 +97,30 @@ def authentication_requests(queue, pass_park):
 
         # сохранение куки после авторизации для дальнейших запросов
         pickle.dump(browser.get_cookies(), open(f'{os.path.dirname(os.path.abspath(__file__))}/cookies', 'wb'))
+        status_requests['status'] = 201
 
-        return True
+        return status_requests
+
     except TimeoutException:
         logging.error('TimeoutException. Время ожидания поиска элемента истекло!')
+        status_requests['status'] = 400
+        status_requests['message'] = 'Время ожидания поиска элемента истекло!'
+        return status_requests
     except TimeoutError as ex:
         logging.error(f'TimeoutError. Время ожидания истекло и возникла ошибка времени ожидания: {ex}')
+        status_requests['status'] = 400
+        status_requests['message'] = f'Время ожидания истекло и возникла ошибка времени ожидания: {ex}'
+        return status_requests
     except Exception as ex:
         logging.error(f'Exception. Ошибка {ex}')
-    except NoSuchElementException:
-        return 'NoSuchElementException. Возможные проблемы c авторизацией по прямому запросу!'
+        status_requests['status'] = 400
+        status_requests['message'] = f'Время ожидания истекло и возникла ошибка времени ожидания: {ex}'
+        return status_requests
+    except NoSuchElementException as ex:
+        logging.error(f'NoSuchElementException. Возможные проблемы c авторизацией по прямому запросу: {ex}')
+        status_requests['status'] = 400
+        status_requests['message'] = f'Возможные проблемы c авторизацией по прямому запросу!: {ex}'
+        return status_requests
     finally:
         browser.close()
         browser.quit()

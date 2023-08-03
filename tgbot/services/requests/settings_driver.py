@@ -120,7 +120,7 @@ def options_driver():
 
     elif not os.getenv('USE_PROXY') is False:
         browser = webdriver.Chrome(
-            ChromeDriverManager().install(),
+            ChromeDriverManager(version='114.0.5735.90').install(),
             chrome_options=chrome_options
         )
         return browser

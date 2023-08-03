@@ -58,14 +58,26 @@ def change_limit_requests(phone, limit, url=None):
         status_requests['status'] = 200
 
         return status_requests
+
     except TimeoutException:
-        logging.error('TimeoutException. Время ожидания поиска элемента истекло')
+        logging.error('TimeoutException. Время ожидания поиска элемента истекло!')
+        status_requests['status'] = 400
+        status_requests['message'] = 'Время ожидания поиска элемента истекло!'
+        return status_requests
     except TimeoutError as ex:
         logging.error(f'TimeoutError. Время ожидания истекло и возникла ошибка времени ожидания: {ex}')
+        status_requests['status'] = 400
+        status_requests['message'] = f'Время ожидания истекло и возникла ошибка времени ожидания'
+        return status_requests
     except Exception as ex:
         logging.error(f'Exception. Ошибка {ex}')
+        status_requests['status'] = 400
+        status_requests['message'] = 'Ошибка при выполнении запроса!'
+        return status_requests
     except NoSuchElementException:
-        return 'NoSuchElementException. Возможные проблемы c авторизацией по прямому запросу!'
+        status_requests['status'] = 400
+        status_requests['message'] = 'Возможные проблемы c авторизацией по прямому запросу!'
+        return status_requests
     finally:
         browser.close()
         browser.quit()

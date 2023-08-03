@@ -61,7 +61,14 @@ venv.bak/
 .pyre/
 .idea/*
 .env
+
+# Project Python
 tgbot/services/requests/cookies
-alembic
+postgres/
+bot.conf
+backups/
 alembic.ini
+alembic/versions/
+logs/
 .DS_Store
+

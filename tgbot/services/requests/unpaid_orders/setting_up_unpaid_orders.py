@@ -19,6 +19,7 @@ async def settings_for_select_period_unpaid_orders(obj, session, phone, taxi_id,
     Работа запросов по выдаче информации о неоплаченных заказах.
     Обработка запросов в отдельном потоке.
     """
+    request = {}
     try:
         loop = asyncio.get_running_loop()
         with ThreadPoolExecutor() as pool:
@@ -33,22 +34,37 @@ async def settings_for_select_period_unpaid_orders(obj, session, phone, taxi_id,
                 password, queue = await send_code_bot(obj, session)
                 # прямой запрос на авторизацию
                 auth = await loop.run_in_executor(pool, authentication_requests, queue, password)
-                if auth:
+
+                if auth.get('status') == 201:
                     request = await loop.run_in_executor(
                         pool, unpaid_orders_requests, phone, interval)
 
                     if request.get('status') != 401:
                         return request
+                    elif request.get('status') == 401:
+                        request['status'] = 401
+                        request['message'] = 'Авторизации не выполнена! Попробуйте позже..'
+                        return request
                 else:
-                    return 'Авторизации не выполнена! Попробуйте позже..'
+                    request['status'] = 401
+                    request['message'] = 'Авторизации не выполнена! Попробуйте позже..'
+                    return request
+            elif request.get('status') == 400:
+                return request
 
     except TimeoutError as e:
         logging.error(f'Возникла ошибка времени ожидания: {e}')
-        return f'Возникла ошибка времени ожидания: {e}'
+        request['status'] = 400
+        request['message'] = 'Возникла ошибка времени ожидания'
+        return request
     except aiohttp.ClientError as e:
         logging.error(f'Возникла сетевая ошибка: {e}')
-        return 'Сетевая ошибка'
+        request['status'] = 400
+        request['message'] = f'Возникла сетевая ошибка'
+        return request
     except Exception as e:
         logging.error(f'Ошибка {e}')
         logging.exception('Ошибка в обработке команды: %s', e)
-        return f'описание ошибки: {e}'
+        request['status'] = 400
+        request['message'] = f'Ошибка на стороне сервера'
+        return request

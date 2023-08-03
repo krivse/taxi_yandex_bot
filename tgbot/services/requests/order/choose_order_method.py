@@ -19,6 +19,7 @@ async def change_working_order_method(obj, session, state, phone, taxi_id, way, 
     Работа запросов по завершению заказов у водителей.
     Обработка запросов в отдельном потоке.
     """
+    request = {}
     try:
         loop = asyncio.get_running_loop()
         with ThreadPoolExecutor() as pool:
@@ -29,36 +30,45 @@ async def change_working_order_method(obj, session, state, phone, taxi_id, way, 
             if request.get('status') != 401:
                 await complete_or_empty_order(obj, way, state, request)
                 return request
-            else:
-                logging.error(
-                    'Возникла ошибка связанная скорее всего с отсутствием элемента на странице', request.get('status')
-                )
 
-            if request.get('status') == 401:
+            elif request.get('status') == 401:
                 # получение кода для авторизации
                 password, queue = await send_code_bot(obj, session)
                 # прямой запрос на авторизацию
                 auth = await loop.run_in_executor(pool, authentication_requests, queue, password)
-                if auth:
+                if auth.get('status') == 201:
                     request = await loop.run_in_executor(
                         pool, working_order_requests, phone, way, amount)
-
                     if request.get('status') != 401:
                         await complete_or_empty_order(obj, way, state, request)
                         return request
+                    elif request.get('status') == 401:
+                        request['status'] = 401
+                        request['message'] = 'Авторизации не выполнена! Попробуйте позже..'
+                        return request
                 else:
-                    return 'Авторизации не выполнена! Попробуйте позже..'
+                    request['status'] = 401
+                    request['message'] = 'Авторизации не выполнена! Попробуйте позже..'
+                    return request
+            elif request.get('status') == 400:
+                return request
 
     except TimeoutError as e:
         logging.error(f'Возникла ошибка времени ожидания: {e}')
-        return 'Возникла ошибка времени ожидания'
+        request['status'] = 400
+        request['message'] = 'Возникла ошибка времени ожидания'
+        return request
     except aiohttp.ClientError as e:
         logging.error(f'Возникла сетевая ошибка: {e}')
-        return 'Сетевая ошибка'
+        request['status'] = 400
+        request['message'] = f'Возникла сетевая ошибка'
+        return request
     except Exception as e:
         logging.error(f'Ошибка {e}')
         logging.exception('Ошибка в обработке команды: %s', e)
-        return 'Ошибка на стороне сервера телеграм'
+        request['status'] = 400
+        request['message'] = f'Ошибка на стороне сервера'
+        return request
 
 
 async def complete_or_empty_order(obj, way, state, request):
