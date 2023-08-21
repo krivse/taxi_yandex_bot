@@ -71,4 +71,5 @@ alembic.ini
 alembic/versions/
 logs/
 .DS_Store
+tgbot/services/requests/chromedriver
 
