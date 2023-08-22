@@ -53,10 +53,12 @@ def change_limit_requests(phone, limit, url=None):
         change_limit.send_keys([Keys.BACKSPACE] * 10)
         change_limit.send_keys(limit)
         # сохранить новый лимит водителя
-        save_button = wait.until(EC.element_to_be_clickable((
+        save_button = wait.until(EC.visibility_of_element_located((
             By.XPATH, "//div[starts-with(@class, 'DriverForm_button__')]"
         )))
-        save_button.click()
+        click_on_buttons = WebDriverWait(save_button, 30).until(
+            EC.visibility_of_element_located((By.TAG_NAME, 'Button')))
+        click_on_buttons.click()
         status_requests['status'] = 200
 
         return status_requests
