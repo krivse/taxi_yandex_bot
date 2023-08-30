@@ -53,7 +53,9 @@ def change_limit_requests(phone, limit, url=None):
         change_limit.send_keys([Keys.BACKSPACE] * 10)
         change_limit.send_keys(limit)
         # сохранить новый лимит водителя
-        click_on_buttons = wait.until(EC.visibility_of_element_located((By.CLASS_NAME, 'Gpbecc')))
+        click_on_buttons = wait.until(EC.visibility_of_element_located(
+            (By.XPATH, "//span[contains(text(), 'Сохранить')]"))
+        )
         click_on_buttons.click()
         status_requests['status'] = 200
 

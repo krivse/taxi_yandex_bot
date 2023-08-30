@@ -13,8 +13,6 @@ from tgbot.services.requests.settings_driver import options_driver
 from aiogram.types import Message
 
 
-
-
 async def send_code_bot(obj, session):
     # отправление сообщения админу для ввода кода
     if isinstance(obj, Message):
@@ -82,7 +80,7 @@ def authentication_requests(queue, pass_park):
         enter_code = wait.until(EC.element_to_be_clickable((By.ID, 'passp-field-phoneCode')))
         code = queue.get()
         enter_code.send_keys(code)
-        # ожидание ввода пароля в течении 300 секунд
+        # ожидание ввода пароля в течение 300 секунд
         WebDriverWait(browser, 300).until(EC.staleness_of(enter_code))
 
         # клик на кнопку "Далее"
