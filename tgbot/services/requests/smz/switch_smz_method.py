@@ -1,25 +1,26 @@
 import logging
+
 import aiohttp
 import asyncio
 from asyncio.exceptions import TimeoutError
 from concurrent.futures import ThreadPoolExecutor
 
 from tgbot.services.requests.authentication import authentication_requests, send_code_bot
-from tgbot.services.requests.unpaid_orders.unpaid_orders import unpaid_orders_requests
+from tgbot.services.requests.smz.switch_smz import switch_smz_request
 
 
-async def settings_for_select_period_unpaid_orders(obj, session, phone, taxi_id, interval):
+async def on_or_off_smz_method(obj, session, phone, taxi_id):
     """
-    Работа запросов по выдаче информации о неоплаченных заказах.
-    Обработка запросов в отдельном потоке.
+    Запросы на включение / отключение СМЗ.
+    Обработка запросов в отдельном блокирующем потоке.
     """
     request = {}
     try:
         loop = asyncio.get_running_loop()
         with ThreadPoolExecutor() as pool:
-            # вход на страницу водителя по его id
+            # если id водителя есть, то сразу получаем доступ к странице водителя
             request = await loop.run_in_executor(
-                    pool, unpaid_orders_requests, phone, interval, taxi_id)
+                pool, switch_smz_request, phone, taxi_id)
 
             if request.get('status') != 401:
                 return request
@@ -28,11 +29,8 @@ async def settings_for_select_period_unpaid_orders(obj, session, phone, taxi_id,
                 password, queue = await send_code_bot(obj, session)
                 # прямой запрос на авторизацию
                 auth = await loop.run_in_executor(pool, authentication_requests, queue, password)
-
                 if auth.get('status') == 201:
-                    request = await loop.run_in_executor(
-                        pool, unpaid_orders_requests, phone, interval)
-
+                    request = await loop.run_in_executor(pool, switch_smz_request, phone, taxi_id)
                     if request.get('status') != 401:
                         return request
                     elif request.get('status') == 401:

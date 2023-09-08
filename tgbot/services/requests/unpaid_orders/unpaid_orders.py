@@ -1,7 +1,8 @@
 import logging
 import os
 
-from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException
+from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, \
+    StaleElementReferenceException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -52,7 +53,7 @@ def unpaid_orders_requests(phone, interval, url=None):
             # открыть календарь для установки периода
             general_calendars(wait, interval)
 
-        # устанавливаем фильмы для поиска нужных заказов
+        # устанавливаем фильтры для поиска нужных заказов
         actions = ActionChains(browser)
         filters = wait.until(EC.visibility_of_all_elements_located((By.CLASS_NAME, 'Select__control')))
         for i in filters:
@@ -117,7 +118,6 @@ def unpaid_orders_requests(phone, interval, url=None):
             except TimeoutException:
                 # обработка исключения при отсутствии элемента на странице выше лимита из функции WebDriverWait
                 break
-
         # сбор данных по неоплаченным заказам
         tbody = wait.until(EC.visibility_of_element_located((By.TAG_NAME, 'tbody')))
         orders = WebDriverWait(tbody, 30).until(
@@ -139,20 +139,20 @@ def unpaid_orders_requests(phone, interval, url=None):
         status_requests['status'] = 400
         status_requests['message'] = 'Время ожидания поиска элемента истекло!'
         return status_requests
-    except TimeoutError as ex:
-        logging.error(f'TimeoutError. Время ожидания истекло и возникла ошибка времени ожидания: {ex}')
-        status_requests['status'] = 400
-        status_requests['message'] = f'Время ожидания истекло и возникла ошибка времени ожидания: {ex}'
-        return status_requests
     except Exception as ex:
         logging.error(f'Exception. Ошибка {ex}')
         status_requests['status'] = 400
         status_requests['message'] = 'Ошибка при выполнении запроса!'
         return status_requests
-    except NoSuchElementException:
+    except NoSuchElementException as nse:
+        logging.error(f'NoSuchElementException. Ошибка {nse}')
         status_requests['status'] = 400
-        status_requests['message'] = 'Возможные проблемы c авторизацией по прямому запросу!'
+        status_requests['message'] = 'Элемент не найден!'
         return status_requests
+    except ElementClickInterceptedException as ece:
+        logging.error(f'ElementClickInterceptedException. Ошибка {ece}')
+        status_requests['status'] = 400
+        status_requests['message'] = 'Элемент не взаимодействует!'
     finally:
         browser.close()
         browser.quit()

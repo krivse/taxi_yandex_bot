@@ -123,6 +123,7 @@ def options_driver():
             ChromeDriverManager(version='114.0.5735.90').install(),
             chrome_options=chrome_options
         )
+
         return browser
 
 

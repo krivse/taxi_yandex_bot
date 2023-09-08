@@ -5,13 +5,13 @@ from aiogram.dispatcher import Dispatcher
 
 from sqlalchemy.exc import IntegrityError
 
-from tgbot.keyboards.inline_admin import access, access_debt, account, agree_text, reset_user_removal, help_keyboard
+from tgbot.keyboards.inline_admin import access, access_debt, account, agree_text, edit_cancel, reset_user_removal, \
+    help_keyboard
 from tgbot.keyboards.user_button import choose_menu_for_user
 from tgbot.misc.states import AccountParkState, CodeConfirmState, DeleteState, EditState, HelpState, NewSendState, \
     RegisterState
 from tgbot.models.query import (add_or_update_limit_user, add_or_update_text_for_help, add_user, delete_access_user,
-                                drop_user, get_all_users, get_user_unique_phone,
-                                update_account_password)
+                                drop_user, get_all_users, get_user_unique_phone, update_account_password)
 from tgbot.services.api.get_list_drivers import get_driver_profile
 from tgbot.services.set_commands import commands, set_default_commands
 
@@ -171,15 +171,19 @@ async def edit_driver(message: Message, state: FSMContext):
     await state.update_data(msg_to_delete_debt=msg_to_delete_debt.message_id)
 
 
-async def on_of_off_debt(call: CallbackQuery):
+async def on_of_off_debt(call: CallbackQuery, state: FSMContext):
     """Добавление / удаление смены в минус."""
     if call.data == 'on_debt':
-        await call.message.answer(f'Для добавления "Смены в минус" введите номер телефона водителя')
-        # передаём состояние в функцию edit_debt
+        message = await call.message.answer(
+            f'Для подключения "Смены в минус" введите номер телефона водителя', reply_markup=edit_cancel)
+        await state.update_data(msg_to_delete_cancel_edit=message.message_id)
+        # передаём состояние в функцию edit_on_debt
         await EditState.on_phone.set()
     elif call.data == 'off_debt':
-        await call.message.answer(f'Для удаления "Смены в минус" введите номер телефона водителя')
-        # передаём состояние в функцию edit_debt
+        message = await call.message.answer(
+            f'Для отключения "Смены в минус" введите номер телефона водителя', reply_markup=edit_cancel)
+        await state.update_data(msg_to_delete_cancel_edit=message.message_id)
+        # передаём состояние в функцию edit_off_debt
         await EditState.off_phone.set()
 
 
@@ -198,7 +202,7 @@ async def edit_on_debt(message: Message, session, state: FSMContext):
             await EditState.limit.set()
             await state.update_data(taxi_id=user[2])
         elif user is None:
-            await message.answer('Такого номер нет. Попробуйте ввести ещё раз..')
+            await message.answer('Такого номера нет. Попробуйте ввести ещё раз..')
     else:
         await message.answer(f'Попробуйте ещё раз и вводите только цифры..')
 
@@ -244,6 +248,15 @@ async def edit_cancel_dept(call: CallbackQuery, state: FSMContext):
     """Отменить действие на редактирование / удаление клавиатуры / информационного сообщения."""
     msg_to_delete_debt = (await state.get_data()).get('msg_to_delete_debt')
     await call.message.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_to_delete_debt)
+    await state.finish()
+
+
+async def edit_cancel_edit(call: CallbackQuery, state: FSMContext):
+    """Отменить действие на редактирование / удаление клавиатуры / информационного сообщения."""
+    msg_to_delete_debt = (await state.get_data()).get('msg_to_delete_debt')
+    msg_to_delete_cancel_edit = (await state.get_data()).get('msg_to_delete_cancel_edit')
+    await call.message.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_to_delete_debt)
+    await call.message.bot.delete_message(chat_id=call.message.chat.id, message_id=msg_to_delete_cancel_edit)
     await state.finish()
 
 
@@ -385,7 +398,8 @@ def register_admin(dp: Dispatcher):
     dp.register_message_handler(edit_on_debt, state=EditState.on_phone, is_admin=True)
     dp.register_message_handler(edit_off_debt, state=EditState.off_phone, is_admin=True)
     dp.register_message_handler(edit_limit, state=EditState.limit, is_admin=True)
-    dp.register_callback_query_handler(edit_cancel_dept, text='cancel_debt', is_admin=True)
+    dp.register_callback_query_handler(edit_cancel_dept, text='cancel_edit', is_admin=True)
+    dp.register_callback_query_handler(edit_cancel_edit, state=EditState, text='edit_cancel', is_admin=True)
     dp.register_message_handler(newsend, Command('newsend'), is_admin=True)
     dp.register_message_handler(newsend_text, state=NewSendState.text, is_admin=True)
     dp.register_callback_query_handler(

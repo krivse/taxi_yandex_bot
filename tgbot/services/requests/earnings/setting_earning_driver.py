@@ -5,13 +5,9 @@ import asyncio
 from asyncio.exceptions import TimeoutError
 from concurrent.futures import ThreadPoolExecutor
 
-from tgbot.models.query import add_url_driver
-from tgbot.services.other_functions.phone_formatter import phone_formatting
 from tgbot.services.requests.authentication import authentication_requests, send_code_bot
 from tgbot.services.requests.earnings.eranings_driver import earnings_driver_requests
 
-
-# load_dotenv()
 
 async def settings_for_select_period_earnings_driver(obj, session, phone, taxi_id, interval):
     """
@@ -25,10 +21,10 @@ async def settings_for_select_period_earnings_driver(obj, session, phone, taxi_i
             # вход на страницу водителя по его id
             request = await loop.run_in_executor(
                 pool, earnings_driver_requests, phone, interval, taxi_id)
-            if request.get('status') == 200:
-                return request
 
-            if request.get('status') == 401:
+            if request.get('status') != 401:
+                return request
+            elif request.get('status') == 401:
                 # получение кода для авторизации
                 password, queue = await send_code_bot(obj, session)
                 # прямой запрос на авторизацию
@@ -46,8 +42,6 @@ async def settings_for_select_period_earnings_driver(obj, session, phone, taxi_i
                     request['status'] = 401
                     request['message'] = 'Авторизации не выполнена! Попробуйте позже..'
                     return request
-            elif request.get('status') == 400:
-                return request
 
     except TimeoutError as e:
         logging.error(f'Возникла ошибка времени ожидания: {e}')

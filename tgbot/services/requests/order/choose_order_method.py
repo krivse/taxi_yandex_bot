@@ -6,8 +6,6 @@ from asyncio.exceptions import TimeoutError
 from concurrent.futures import ThreadPoolExecutor
 
 from tgbot.keyboards.inline_users import order_processing
-from tgbot.models.query import add_url_driver
-from tgbot.services.other_functions.phone_formatter import phone_formatting
 from tgbot.services.requests.authentication import authentication_requests, send_code_bot
 from tgbot.services.requests.order.work_with_order import working_order_requests
 
@@ -30,7 +28,6 @@ async def change_working_order_method(obj, session, state, phone, taxi_id, way, 
             if request.get('status') != 401:
                 await complete_or_empty_order(obj, way, state, request)
                 return request
-
             elif request.get('status') == 401:
                 # получение кода для авторизации
                 password, queue = await send_code_bot(obj, session)
@@ -50,8 +47,6 @@ async def change_working_order_method(obj, session, state, phone, taxi_id, way, 
                     request['status'] = 401
                     request['message'] = 'Авторизации не выполнена! Попробуйте позже..'
                     return request
-            elif request.get('status') == 400:
-                return request
 
     except TimeoutError as e:
         logging.error(f'Возникла ошибка времени ожидания: {e}')

@@ -5,13 +5,8 @@ import asyncio
 from asyncio.exceptions import TimeoutError
 from concurrent.futures import ThreadPoolExecutor
 
-from tgbot.models.query import add_url_driver
-from tgbot.services.other_functions.phone_formatter import phone_formatting
 from tgbot.services.requests.authentication import authentication_requests, send_code_bot
 from tgbot.services.requests.limit.change_limit import change_limit_requests
-
-
-# load_dotenv()
 
 
 async def change_of_payment_method(obj, session, limit, phone, taxi_id):
@@ -26,9 +21,9 @@ async def change_of_payment_method(obj, session, limit, phone, taxi_id):
             # если id водителя есть, то сразу получаем доступ к странице водителя
             request = await loop.run_in_executor(
                 pool, change_limit_requests, phone, limit, taxi_id)
-            if request.get('status') != 401:
-                return request.get('status')
 
+            if request.get('status') != 401:
+                return request
             elif request.get('status') == 401:
                 # получение кода для авторизации
                 password, queue = await send_code_bot(obj, session)
@@ -46,8 +41,6 @@ async def change_of_payment_method(obj, session, limit, phone, taxi_id):
                     request['status'] = 401
                     request['message'] = 'Авторизации не выполнена! Попробуйте позже..'
                     return request
-            elif request.get('status') == 400:
-                return request
 
     except TimeoutError as e:
         logging.error(f'Возникла ошибка времени ожидания: {e}')

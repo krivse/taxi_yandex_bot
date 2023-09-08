@@ -4,6 +4,62 @@ from tgbot.models.models import User, DriverSettings, AccountPark, Help
 from tgbot.services.other_functions.phone_formatter import phone_formatting
 
 
+async def add_or_update_smz_user(session, user_id, swtich):
+    """Подключение или отключение услуги СМЗ."""
+    # возвращается две записи из бд, если в обеих таблицах есть связанная запись.
+    user = (await session.execute(
+        select(
+            DriverSettings.telegram_id, User.first_name, User.middle_name
+        ).join(
+            User
+        ).where(
+            User.telegram_id == user_id
+        ).union_all(
+            select(
+                User.telegram_id, User.first_name, User.middle_name
+            ).where(
+                User.telegram_id == user_id)
+
+        ))).fetchall()
+
+    # если записи нет в driver_settings, то она создается
+    result = None
+    if len(user) == 1:
+        result = (await session.execute(
+            insert(
+                DriverSettings
+            ).values(
+                telegram_id=user[0][0],
+                smz=swtich
+            ).returning(DriverSettings.smz))).scalar()
+    # если такая запись есть, то она обновляется
+    elif len(user) > 1:
+        result = (await session.execute(
+            update(
+                DriverSettings
+            ).where(
+                DriverSettings.telegram_id == user[0][0]
+            ).values(
+                smz=swtich
+            ).returning(DriverSettings.smz))).scalar()
+    await session.commit()
+
+    return result
+
+
+async def switch_smz(session, user_id):
+    """Получить статуса для смены в долг."""
+    result = (await session.execute(
+        select(
+            DriverSettings.smz
+        ).join(
+            User
+        ).where(
+            User.telegram_id == user_id))).scalar()
+
+    return result
+
+
 async def get_info_from_help(session):
     """Получение поля text из таблицы Help."""
     exists = await session.get(Help, 1)
@@ -149,7 +205,7 @@ async def delete_access_user(session, telegram_id):
 async def add_or_update_limit_user(session, taxi_id, limit):
     """Добавление или обновление записи водителя с лимитом."""
 
-    # возращается две записи из бд, если в обеих таблицах есть связанная запись.
+    # возвращается две записи из бд, если в обеих таблицах есть связанная запись.
     user = (await session.execute(
         select(
             DriverSettings.telegram_id, User.first_name, User.middle_name

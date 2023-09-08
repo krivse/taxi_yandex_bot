@@ -17,7 +17,7 @@ def general_calendars(wait, interval):
     for calendar in range(len(calendars)):
         # начальный месяц
         find_month = WebDriverWait(calendars[calendar], 30).until(
-            EC.visibility_of_element_located((By.TAG_NAME, 'span'))).text
+            EC.presence_of_element_located((By.TAG_NAME, 'span'))).text
 
         if find_month.startswith(interval.get('start_month')):
             # начальный день

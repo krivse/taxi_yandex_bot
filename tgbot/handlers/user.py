@@ -10,11 +10,12 @@ from tgbot.keyboards.inline_users import callback_earnings, callback_unpaid, can
     order_types, unpaid_orders_keyboard
 from tgbot.keyboards.user_button import choose_menu_for_user
 from tgbot.misc.states import RegisterState
-from tgbot.models.query import access_debt_mode, get_info_from_help, get_user
+from tgbot.models.query import access_debt_mode, add_or_update_smz_user, get_info_from_help, get_user
 from tgbot.services.other_functions.conts import list_months
 from tgbot.services.requests.earnings.setting_earning_driver import settings_for_select_period_earnings_driver
 from tgbot.services.requests.limit.choose_payment_method import change_of_payment_method
 from tgbot.services.requests.order.choose_order_method import change_working_order_method
+from tgbot.services.requests.smz.switch_smz_method import on_or_off_smz_method
 from tgbot.services.requests.unpaid_orders.setting_up_unpaid_orders import settings_for_select_period_unpaid_orders
 from tgbot.services.set_commands import set_default_commands
 
@@ -61,7 +62,8 @@ async def payment_method(message: Message, session, state: FSMContext):
     if method == '💳Безнал' and user is not None:
         # установка лимита для оплаты по безналу.
         response = await change_of_payment_method(message, session, '15000', str(phone), taxi_id)
-        if response == 200:
+        status = response.get('status')
+        if status == 200:
             await message.answer(f'{first_name} {middle_name}, '
                                  'Вам установлен лимит 15000 руб. '
                                  'Пока Ваш баланс ниже этой суммы, вам будут поступать только БЕЗНАЛИЧНЫЕ заказы.')
@@ -73,7 +75,8 @@ async def payment_method(message: Message, session, state: FSMContext):
     elif method == '💵Нал / Безнал' and user is not None:
         # установка лимита для оплаты по нал / безннал.
         response = await change_of_payment_method(message, session, '50', str(phone), taxi_id)
-        if response == 200:
+        status = response.get('status')
+        if status == 200:
             await message.answer(f'{first_name} {middle_name}, '
                                  'Вам установлен лимит 50 руб. '
                                  'Теперь Вам будут поступать НАЛИЧНЫЕ и БЕЗНАЛИЧНЫЕ заказы.')
@@ -263,7 +266,7 @@ async def select_period_unpaid_orders(call: CallbackQuery, session, state: FSMCo
             f'по {date_today.strftime("%d.%m.%Y г.")}'
     }
     msg_del_unpaid = await call.message.answer(
-        text=f'🔎 Поиск неоплаченных заказов {period.get(call.data)} Ожидайте..')
+        text=f'🔎 Поиск неоплаченных заказов {period.get(call.data)}. Проверка заказов займёт около минуты. Ожидайте..')
 
     if call.data == 'unpaid_today':
         day = str(date_today.day)
@@ -378,7 +381,8 @@ async def select_period_earnings(call: CallbackQuery, session, state: FSMContext
     }
 
     msg_del_earn = await call.message.answer(
-        text=f'🚀 Загрузка отчета из диспетчерской {period.get(call.data)} Ожидайте..')
+        text=f'🚀 Загрузка отчета из диспетчерской {period.get(call.data)}. '
+             f'Проверка заказов займёт около минуты. Ожидайте..')
 
     if call.data == 'earnings_today':
         day = str(date_today.day)
@@ -476,6 +480,39 @@ async def cancel_earnings(call: CallbackQuery, state: FSMContext):
     await state.finish()
 
 
+async def connection_smz(message: Message, session):
+    """Включение / Отключение СМЗ."""
+    admin = message.bot.get('config').tg_bot.admin_ids[0]
+    telegram_id = message.chat.id
+    user = await get_user(session, telegram_id)
+    if user is not None:
+        # запрос на переключение СМЗ
+        response = await on_or_off_smz_method(message, session, user[3], user[2])
+        data = response.get('data')
+        status = response.get('status')
+        msg = response.get('message')
+
+        if status == 200 and data == 'СМЗ не подключен, для подключения нужно обратиться в парк':
+            await message.answer(data)
+        elif status == 200 and data == 'СМЗ выключен':
+            await add_or_update_smz_user(session, telegram_id, False)
+            await message.answer('СМЗ отключен', reply_markup=await choose_menu_for_user(session, telegram_id))
+            await message.delete()
+        elif status == 200 and data == 'СМЗ включен':
+            await add_or_update_smz_user(session, telegram_id, True)
+            await message.answer('СМЗ включен', reply_markup=await choose_menu_for_user(session, telegram_id))
+            await message.delete()
+        elif status != 200:
+            await message.answer('Ошибка запроса! Попробуйте позже..')
+            await message.bot.send_message(
+                chat_id=admin,
+                text=f'Ошибка запроса при переключении СМЗ у {str(user[0])} {str(user[1])}!\n'
+                     f'Cтатус: {status}\nОписание: {msg}')
+            await message.delete()
+    else:
+        await message.answer(f'У вас нет доступа!')
+
+
 def register_user(dp: Dispatcher):
     dp.register_message_handler(user_start, CommandStart(), state='*')
     dp.register_message_handler(payment_method, text=['💳Безнал', '💵Нал / Безнал', '🕰Смена в долг'])
@@ -490,3 +527,4 @@ def register_user(dp: Dispatcher):
     dp.register_message_handler(get_earnings, text='💰Заработок')
     dp.register_callback_query_handler(select_period_earnings, text=callback_earnings)
     dp.register_callback_query_handler(cancel_earnings, text='earnings_cancel')
+    dp.register_message_handler(connection_smz, text=['🔴СМЗ', '🟢СМЗ'])

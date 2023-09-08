@@ -21,11 +21,13 @@ reset_user_removal = InlineKeyboardMarkup(
 access_debt = InlineKeyboardMarkup(
     inline_keyboard=[
         [
-            InlineKeyboardButton(text='Включить', callback_data='on_debt'),
-            InlineKeyboardButton(text='Отключить', callback_data='off_debt')
+            InlineKeyboardButton(text='Включить "Смену в долг"', callback_data='on_debt')
         ],
         [
-            InlineKeyboardButton(text='Отмена', callback_data='cancel_debt')
+            InlineKeyboardButton(text='Отключить "Смену в долг"', callback_data='off_debt')
+        ],
+        [
+            InlineKeyboardButton(text='Отмена', callback_data='cancel_edit')
         ]
     ]
 )
@@ -53,5 +55,13 @@ help_keyboard = InlineKeyboardMarkup(
             InlineKeyboardButton(text='Да', callback_data='confirm_help'),
             InlineKeyboardButton(text='Нет', callback_data='cancel_help')
         ]
+    ]
+)
+
+edit_cancel = InlineKeyboardMarkup(
+ inline_keyboard=[
+        [
+            InlineKeyboardButton(text='Отменить', callback_data='edit_cancel')
+        ],
     ]
 )

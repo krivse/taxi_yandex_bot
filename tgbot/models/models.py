@@ -27,6 +27,7 @@ class DriverSettings(Base):
     limit = Column(SmallInteger, default=None)
     access_limit = Column(Boolean, default=False)
     url_driver_limit = Column(String, default=None)
+    smz = Column(Boolean, default=False)
 
     user = relationship('User', back_populates='driver_settings')
 
