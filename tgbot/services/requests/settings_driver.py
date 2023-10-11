@@ -136,7 +136,7 @@ def add_cookies(browser, wait):
         return False
     browser.refresh()
 
-    name_change_login = wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'Button2-Content'))).text
+    name_change_login = wait.until(EC.presence_of_element_located((By.TAG_NAME, 'Button'))).text
     if name_change_login == 'Сменить логин':
         return False
     return browser
