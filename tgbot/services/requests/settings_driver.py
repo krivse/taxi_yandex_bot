@@ -59,7 +59,7 @@ def options_driver():
     chrome_options.add_argument('--disable-flash-stage3d')
     chrome_options.add_argument('--disable-full-history-sync')
     chrome_options.add_argument('--disable-improved-download-protection')
-    chrome_options.add_argument('--disable-java')
+
     chrome_options.add_argument('--disable-media-history')
     chrome_options.add_argument('--disable-media-source')
     chrome_options.add_argument('--disable-ntp-other-sessions-menu')
@@ -137,7 +137,6 @@ def add_cookies(browser, wait):
     browser.refresh()
 
     name_change_login = wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'Button2-Content'))).text
-
     if name_change_login == 'Сменить логин':
         return False
     return browser

@@ -41,7 +41,7 @@ async def send_code_bot(obj, session):
 def authentication_requests(queue, pass_park):
     """Авторизация в парке"""
     browser = options_driver()
-    wait = WebDriverWait(browser, 30)
+    wait = WebDriverWait(browser, 1000)
 
     # Указываем URL-адрес для входа в систему
     current_park = 'https://fleet.yandex.ru/'
@@ -50,7 +50,7 @@ def authentication_requests(queue, pass_park):
     try:
         browser.get(current_park)
         # Дожидаемся загрузки страницы и нажимает на кнопку смены логина
-        change_username = wait.until(EC.visibility_of_element_located((By.CLASS_NAME, 'Button2-Content')))
+        change_username = wait.until(EC.visibility_of_element_located((By.TAG_NAME, 'button')))
         change_username.click()
 
         # перевод курсора на ввод почты

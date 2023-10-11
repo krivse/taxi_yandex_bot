@@ -4,7 +4,7 @@ from tgbot.models.models import User, DriverSettings, AccountPark, Help
 from tgbot.services.other_functions.phone_formatter import phone_formatting
 
 
-async def add_or_update_smz_user(session, user_id, swtich):
+async def add_or_update_smz_user(session, user_id, switch):
     """Подключение или отключение услуги СМЗ."""
     # возвращается две записи из бд, если в обеих таблицах есть связанная запись.
     user = (await session.execute(
@@ -30,7 +30,7 @@ async def add_or_update_smz_user(session, user_id, swtich):
                 DriverSettings
             ).values(
                 telegram_id=user[0][0],
-                smz=swtich
+                smz=switch
             ).returning(DriverSettings.smz))).scalar()
     # если такая запись есть, то она обновляется
     elif len(user) > 1:
@@ -40,7 +40,7 @@ async def add_or_update_smz_user(session, user_id, swtich):
             ).where(
                 DriverSettings.telegram_id == user[0][0]
             ).values(
-                smz=swtich
+                smz=switch
             ).returning(DriverSettings.smz))).scalar()
     await session.commit()
 
