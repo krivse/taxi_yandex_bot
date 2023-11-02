@@ -9,7 +9,7 @@ from aiogram.dispatcher.handler import CancelHandler
 
 
 class ThrottlingMiddleware(BaseMiddleware):
-    def __init__(self, limit=2, key_prefix='antiflood_'):
+    def __init__(self, limit=3600, key_prefix='antiflood_'):
         self.limit = limit
         self.prefix = key_prefix
         # инициализируем базовый класс BasMiddleware.
@@ -32,15 +32,17 @@ class ThrottlingMiddleware(BaseMiddleware):
             await dp.throttle(key, rate=limit)
         except Throttled as e:
             await self.target_throttled(message, e)
+            self.limit = e.rate - e.delta
             raise CancelHandler()
 
     @staticmethod
     async def target_throttled(target: types.Message, throttled: Throttled):
         # рассчитывается время после последнего тротлинга.
-        delta = int(throttled.rate - throttled.delta)
+        # throttled.
+        delta = int((throttled.rate - throttled.delta) / 60)
         # проверяем сколько раз нажали на кнопку
-        if throttled.exceeded_count > 2:
-            await target.answer(f'Вы сможете отпарвить следующее сообщение через {delta} сек')
+        if throttled.exceeded_count > 5:
+            await target.answer(f'Вы сможете отправить следующее сообщение через {delta} минут.')
             return
         await asyncio.sleep(delta)
 

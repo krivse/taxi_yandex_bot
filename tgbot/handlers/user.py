@@ -48,6 +48,7 @@ async def user_start(message: Message, session, state: FSMContext):
 
 async def payment_method(message: Message, session, state: FSMContext):
     """Выбор способа оплаты."""
+    global last_name
     admin = message.bot.get('config').tg_bot.admin_ids[0]
     # название кнопки
     method = message.text
@@ -57,7 +58,7 @@ async def payment_method(message: Message, session, state: FSMContext):
     telegram_id = message.chat.id
     user = await get_user(session, telegram_id)
     if user is not None:
-        first_name, middle_name, taxi_id, phone = user
+        first_name, middle_name, taxi_id, phone, last_name = user
 
     if method == '💳Безнал' and user is not None:
         # установка лимита для оплаты по безналу.
@@ -71,7 +72,7 @@ async def payment_method(message: Message, session, state: FSMContext):
             await message.answer('Ошибка запроса! Попробуйте позже..')
             await message.bot.send_message(
                 chat_id=admin,
-                text=f'Ошибка запроса при изменения лимита у {first_name} {middle_name}, ошибка: {response}')
+                text=f'Ошибка запроса при изменения лимита у {last_name} {first_name} {middle_name}, ошибка: {response}')
     elif method == '💵Нал / Безнал' and user is not None:
         # установка лимита для оплаты по нал / безннал.
         response = await change_of_payment_method(message, session, '50', str(phone), taxi_id)
@@ -84,7 +85,8 @@ async def payment_method(message: Message, session, state: FSMContext):
             await message.answer('Ошибка запроса! Попробуйте позже..')
             await message.bot.send_message(
                 chat_id=admin,
-                text=f'Ошибка запроса при изменения лимита у {first_name} {middle_name}, ошибка: {response}.')
+                text=f'Ошибка запроса при изменения лимита у {last_name} {first_name} {middle_name}, '
+                     f'ошибка: {response}.')
     elif method == '🕰Смена в долг' and user is not None:
         # установка лимита для режима работы в долг.
         access, limit = await access_debt_mode(session, telegram_id)
@@ -100,7 +102,7 @@ async def payment_method(message: Message, session, state: FSMContext):
                 await message.answer('Ошибка запроса! Попробуйте позже..')
                 await message.bot.send_message(
                     chat_id=admin,
-                    text=f'Ошибка запроса при изменения лимита у {first_name} {middle_name},'
+                    text=f'Ошибка запроса при изменения лимита у {last_name} {first_name} {middle_name},'
                          f' статус: {status}, описание: {msg}')
         elif not access:
             await message.answer('Смена в долг не подключена!')
@@ -133,7 +135,7 @@ async def amount_order(message: Message, session, state: FSMContext):
                 await message.answer('Ошибка запроса! Попробуйте позже..')
                 await message.bot.send_message(
                     chat_id=admin,
-                    text=f'Ошибка запроса при получении информации о заказе у {user[0]} {user[1]},'
+                    text=f'Ошибка запроса при получении информации о заказе у {user[4]} {user[0]} {user[1]},'
                          f' статус: {status}, описание: {msg}')
         else:
             await message.answer('У вас нет доступа!')
@@ -168,7 +170,7 @@ async def complete_order(call: CallbackQuery, session, state: FSMContext):
         await call.message.answer('Ошибка запроса! Попробуйте позже..')
         await call.message.bot.send_message(
             chat_id=admin,
-            text=f'Ошибка запроса при попытке завершения заказа у {user[0]} {user[1]},'
+            text=f'Ошибка запроса при попытке завершения заказа у {user[4]} {user[0]} {user[1]},'
                  f' статус: {status}, описание: {msg}')
 
     msg_delete = (await state.get_data()).get('msg_order_delete')
@@ -211,7 +213,7 @@ async def confirm_cancel_order(call: CallbackQuery, session, state: FSMContext):
             await call.message.answer('Ошибка запроса! Попробуйте позже..')
             await call.message.bot.send_message(
                 chat_id=admin,
-                text=f'Ошибка запроса при отмене заказа у {user[0]} {user[1]},'
+                text=f'Ошибка запроса при отмене заказа у {user[4]} {user[0]} {user[1]},'
                      f' статус: {status}, описание: {msg}')
     elif call.data == 'not_cancel' and user is not None:
         await call.message.delete()
@@ -329,7 +331,7 @@ async def select_period_unpaid_orders(call: CallbackQuery, session, state: FSMCo
         await call.message.answer('Ошибка запроса! Попробуйте позже..')
         await call.message.bot.send_message(
             chat_id=admin,
-            text=f'Ошибка запроса при получении неоплаченных заказов у {str(user[0])} {str(user[1])},'
+            text=f'Ошибка запроса при получении неоплаченных заказов у {user[4]} {user[0]} {user[1]},'
                  f' статус: {status}, описание: {msg}.')
 
     await state.finish()
@@ -468,7 +470,7 @@ async def select_period_earnings(call: CallbackQuery, session, state: FSMContext
         await call.message.answer('Ошибка запроса! Попробуйте позже..')
         await call.message.bot.send_message(
             chat_id=admin,
-            text=f'Ошибка запроса при получении неоплаченных заказов у {user[0]} {user[1]},'
+            text=f'Ошибка запроса при получении неоплаченных заказов у {user[4]} {user[0]} {user[1]},'
                  f' статус: {status}, описание: {msg}')
     await state.finish()
 
@@ -506,7 +508,7 @@ async def connection_smz(message: Message, session):
             await message.answer('Ошибка запроса! Попробуйте позже..')
             await message.bot.send_message(
                 chat_id=admin,
-                text=f'Ошибка запроса при переключении СМЗ у {str(user[0])} {str(user[1])}!\n'
+                text=f'Ошибка запроса при переключении СМЗ у {user[4]} {user[0]} {user[1]}!\n'
                      f'Cтатус: {status}\nОписание: {msg}')
             await message.delete()
     else:

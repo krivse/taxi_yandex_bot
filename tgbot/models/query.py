@@ -281,7 +281,7 @@ async def get_all_users(session):
 async def get_user(session, user_id):
     """Получить одного пользователя по telegram_id."""
     result = (await session.execute(select(
-        User.first_name, User.middle_name, User.taxi_id, User.phone
+        User.first_name, User.middle_name, User.taxi_id, User.phone, User.last_name
     ).where(User.telegram_id == user_id))).fetchone()
 
     return result
