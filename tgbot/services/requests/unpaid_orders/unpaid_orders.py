@@ -51,10 +51,10 @@ def unpaid_orders_requests(phone, interval, url=None):
 
         if interval is not None:
             # открыть календарь для установки периода
-            general_calendars(wait, interval)
+            general_calendars(wait, interval, browser)
 
-        # устанавливаем фильтры для поиска нужных заказов
         actions = ActionChains(browser)
+        # устанавливаем фильтры для поиска нужных заказов
         filters = wait.until(EC.visibility_of_all_elements_located((By.CLASS_NAME, 'Select__control')))
         for i in filters:
             if i.text == 'Статус':
@@ -107,11 +107,16 @@ def unpaid_orders_requests(phone, interval, url=None):
                 if exists_el.is_enabled() is True:
                     # перебираются все кнопки для поиска 'Загрузить ещё'
                     download_more = wait.until(
-                        EC.presence_of_all_elements_located((By.CLASS_NAME, 'Button2-Content')))
+                        EC.presence_of_all_elements_located(
+                            (By.CSS_SELECTOR, '#root > div.THUkpl > div > div.pEdyOl.vGEKNl > div > '
+                                              'div.app-shell_layout__lb7na > div.Section_section__o33vD > main > '
+                                              'div:nth-child(2) > div > div.Table_loadMore__hQyCq > button > span'))
+                    )
                     for i in range(len(download_more)):
                         if download_more[i].text == 'Загрузить ещё':
                             # time.sleep(0.1)
-                            download_more[i].click()
+                            browser.execute_script('arguments[0].click()', download_more[i])
+                            # download_more[i].click()
             except StaleElementReferenceException:
                 # обработка исключения и переход на новую итерацию
                 continue

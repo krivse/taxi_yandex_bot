@@ -48,13 +48,12 @@ async def user_start(message: Message, session, state: FSMContext):
 
 async def payment_method(message: Message, session, state: FSMContext):
     """Выбор способа оплаты."""
-    global last_name
     admin = message.bot.get('config').tg_bot.admin_ids[0]
     # название кнопки
     method = message.text
 
     # получаем пользователя из бд.
-    first_name, middle_name, taxi_id, phone = None, None, None, None
+    first_name, middle_name, taxi_id, phone, last_name = None, None, None, None, None
     telegram_id = message.chat.id
     user = await get_user(session, telegram_id)
     if user is not None:
@@ -470,7 +469,7 @@ async def select_period_earnings(call: CallbackQuery, session, state: FSMContext
         await call.message.answer('Ошибка запроса! Попробуйте позже..')
         await call.message.bot.send_message(
             chat_id=admin,
-            text=f'Ошибка запроса при получении неоплаченных заказов у {user[4]} {user[0]} {user[1]},'
+            text=f'Ошибка запроса при получении отчета у {user[4]} {user[0]} {user[1]},'
                  f' статус: {status}, описание: {msg}')
     await state.finish()
 

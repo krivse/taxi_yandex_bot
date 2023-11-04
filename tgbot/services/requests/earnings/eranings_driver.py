@@ -47,7 +47,7 @@ def earnings_driver_requests(phone, interval, url=None):
             tab_earnings.click()
 
         # открыть календарь для установки периода
-        general_calendars(wait, interval)
+        general_calendars(wait, interval, browser)
 
         earnings_list = []
         data = wait.until(EC.visibility_of_all_elements_located((By.TAG_NAME, 'dd')))
@@ -57,7 +57,6 @@ def earnings_driver_requests(phone, interval, url=None):
         status_requests['earnings'] = earnings_list
 
         return status_requests
-
 
     except TimeoutException:
 
