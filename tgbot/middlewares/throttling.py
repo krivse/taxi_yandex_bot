@@ -29,6 +29,7 @@ class ThrottlingMiddleware(BaseMiddleware):
             # если троттл сработал.
             await dp.throttle(key, rate=limit)
         except Throttled as e:
+            # обновляем лимит
             self.limit = e.rate - e.delta
             await self.target_throttled(message, e)
 
