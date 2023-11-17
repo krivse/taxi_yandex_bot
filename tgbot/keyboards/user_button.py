@@ -23,7 +23,7 @@ async def choose_menu_for_user(session, telegram_id):
                 ],
                 [
                     # KeyboardButton(text='🏁Завершить тек. заказ'),
-                    KeyboardButton(text=switch),
+                    # KeyboardButton(text=switch),
                     KeyboardButton(text='❌Отменить текущий заказ')
                 ],
                 [
@@ -47,7 +47,7 @@ async def choose_menu_for_user(session, telegram_id):
                 ],
                 [
                     # KeyboardButton(text='🏁Завершить тек. заказ'),
-                    KeyboardButton(text=switch),
+                    # KeyboardButton(text=switch),
                     KeyboardButton(text='❌Отменить текущий заказ')
                 ],
                 [
