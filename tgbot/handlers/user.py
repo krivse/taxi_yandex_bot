@@ -61,11 +61,11 @@ async def payment_method(message: Message, session, state: FSMContext):
 
     if method == '💳Безнал' and user is not None:
         # установка лимита для оплаты по безналу.
-        response = await change_of_payment_method(message, session, '15000', str(phone), taxi_id)
+        response = await change_of_payment_method(message, session, '100000', str(phone), taxi_id)
         status = response.get('status')
         if status == 200:
             await message.answer(f'{first_name} {middle_name}, '
-                                 'Вам установлен лимит 15000 руб. '
+                                 'Вам установлен лимит 100000 руб. '
                                  'Пока Ваш баланс ниже этой суммы, вам будут поступать только БЕЗНАЛИЧНЫЕ заказы.')
         else:
             await message.answer('Ошибка запроса! Попробуйте позже..')

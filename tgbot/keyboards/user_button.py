@@ -27,8 +27,8 @@ async def choose_menu_for_user(session, telegram_id):
                     KeyboardButton(text='❌Отменить текущий заказ')
                 ],
                 [
-                    KeyboardButton(text='📈Неоплаченные заказы'),
-                    KeyboardButton(text='💰Заработок'),
+                    # KeyboardButton(text='📈Неоплаченные заказы'),
+                    # KeyboardButton(text='💰Заработок'),
                     KeyboardButton(text='📝Справка')
                 ]
             ],
@@ -51,8 +51,8 @@ async def choose_menu_for_user(session, telegram_id):
                     KeyboardButton(text='❌Отменить текущий заказ')
                 ],
                 [
-                    KeyboardButton(text='📈Неоплаченные заказы'),
-                    KeyboardButton(text='💰Заработок'),
+                    # KeyboardButton(text='📈Неоплаченные заказы'),
+                    # KeyboardButton(text='💰Заработок'),
                     KeyboardButton(text='📝Справка')
                 ]
             ],
