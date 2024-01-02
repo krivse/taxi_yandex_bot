@@ -15,22 +15,13 @@ from aiogram.types import Message
 
 async def send_code_bot(obj, session):
     # отправление сообщения админу для ввода кода
-    if isinstance(obj, Message):
-        admin = obj.bot.get('config').tg_bot.admin_ids[0]
-        await obj.bot.send_message(chat_id=admin, text='Ожидайте код для авторизация!')
+    admin = obj.bot.get('config').tg_bot.admin_ids[0]
+    await obj.bot.send_message(chat_id=admin, text='Ожидайте код для авторизация!')
 
-        # передача состояния администратору для ввода кода и записи в очередь !
-        await obj.bot.get('dp').storage.set_state(
-            chat=admin, user=admin, state='CodeConfirmState:code')
-        queue = obj.bot.get('queue')
-    else:
-        admin = obj.message.bot.get('config').tg_bot.admin_ids[0]
-        await obj.message.bot.send_message(chat_id=admin, text='Ожидайте код для авторизация!')
-
-        # передача состояния администратору для ввода кода и записи в очередь !
-        await obj.message.bot.get('dp').storage.set_state(
-            chat=admin, user=admin, state='CodeConfirmState:code')
-        queue = obj.bot.get('queue')
+    # передача состояния администратору для ввода кода и записи в очередь !
+    await obj.bot.get('dp').storage.set_state(
+        chat=admin, user=admin, state='CodeConfirmState:code')
+    queue = obj.bot.get('queue')
     # запрос на получение пароля из бд
     from tgbot.models.query import get_account_password
     password = await get_account_password(session)
