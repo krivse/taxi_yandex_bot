@@ -161,8 +161,7 @@ async def get_drivers(message: Message, session):
             if len(list_driver) + 250 >= 4096:
                 await message.answer(list_driver)
                 list_driver = ''
-            else:
-                list_driver += f'{i}. {name[1]} {name[0]} {name[3]}\n'
+            list_driver += f'{i}. {name[1]} {name[0]} {name[3]}\n'
         await message.answer(list_driver)
     elif not users:
         await message.answer('Список водителей пуст!')
