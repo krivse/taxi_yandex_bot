@@ -24,9 +24,9 @@ def unpaid_orders_requests(phone, interval, url=None):
     wait = WebDriverWait(browser, 30)
 
     if url is None:
-        current_park = f'https://fleet.yandex.ru/drivers?status=working&park_id={os.getenv("X_Park_ID")}'
+        current_park = f'https://fleet.yandex.ru/contractors?status=working&park_id={os.getenv("X_Park_ID")}'
     else:
-        current_park = f'https://fleet.yandex.ru/drivers/{url}/orders?park_id={os.getenv("X_Park_ID")}'
+        current_park = f'https://fleet.yandex.ru/contractors/{url}/orders?park_id={os.getenv("X_Park_ID")}'
 
     status_requests = {}
 

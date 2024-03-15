@@ -22,9 +22,9 @@ def switch_smz_request(phone=None, url=None):
 
     # Указываем URL-адрес для входа в систему
     if url is None:
-        current_park = f'https://fleet.yandex.ru/drivers?status=working&park_id={os.getenv("X_Park_ID")}'
+        current_park = f'https://fleet.yandex.ru/contractors?status=working&park_id={os.getenv("X_Park_ID")}'
     else:
-        current_park = f'https://fleet.yandex.ru/drivers/{url}/details?park_id={os.getenv("X_Park_ID")}'
+        current_park = f'https://fleet.yandex.ru/contractors/{url}/details?park_id={os.getenv("X_Park_ID")}'
 
     status_requests = {}
 
