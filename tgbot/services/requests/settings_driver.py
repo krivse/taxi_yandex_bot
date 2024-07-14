@@ -131,6 +131,7 @@ def add_cookies(browser, wait):
     check_file = os.path.exists(f'{os.path.dirname(os.path.abspath(__file__))}/cookies')
     if check_file:
         for cookie in pickle.load(open(f'{os.path.dirname(os.path.abspath(__file__))}/cookies', 'rb')):
+            cookie['domain'] = 'fleet.yandex.ru'
             browser.add_cookie(cookie)
     elif not check_file:
         return False
