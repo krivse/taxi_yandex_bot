@@ -29,9 +29,11 @@ async def get_driver_profile(phone, header):
 
             # перебор профилей и запись необоздимых данных из профиля.
             for profile in range(len(response.get('driver_profiles'))):
-                driver_phone = int(response.get('driver_profiles')[profile].get('driver_profile').get('phones')[0])
+                try:
+                    driver_phone = int(response.get('driver_profiles')[profile].get('driver_profile').get('phones')[0])
+                except IndexError:
+                    driver_phone = 0
                 if user_phone == driver_phone:
-                    # print(response.get('driver_profiles')[profile])
                     first_name = response.get('driver_profiles')[profile].get('driver_profile').get('first_name')
                     last_name = response.get('driver_profiles')[profile].get('driver_profile').get('last_name')
                     middle_name = response.get('driver_profiles')[profile].get('driver_profile').get('middle_name', '-')
